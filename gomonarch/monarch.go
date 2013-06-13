@@ -2,10 +2,12 @@ package gomonarch
 
 import (
 	"os"
+	"bytes"
 	"syscall"
 	"encoding/binary"
 	"code.google.com/p/goprotobuf/proto"
 	"github.com/project8/swarm/gomonarch/header"
+	"github.com/project8/swarm/gomonarch/record"
 )
 
 type FileMode int
@@ -67,4 +69,37 @@ func NumChannels(m *Monarch) uint32 {
 
 func RecordLength(m *Monarch) uint32 {
 	return m.h.GetRecSize()
+}
+
+func NextRecord(m *Monarch) (r *record.MonarchRecord, e error) {
+	s := RecordLength(m)
+	r = &record.MonarchRecord{Data: make([]byte, s, s)}
+	return r,unmarshal_record(m.f,r)
+}
+
+func unmarshal_record(f *os.File, r *record.MonarchRecord) error {
+	ar := make([]byte, 8,8)
+	buf := bytes.NewBuffer(ar)
+	_, acq_err := f.Read(ar)
+	acq_id, _ := binary.ReadUvarint(buf)
+	if acq_err != nil {
+		return acq_err
+	}
+	_, rec_err := f.Read(ar)
+	rec_id, _ := binary.ReadUvarint(buf)
+	if rec_err != nil {
+		return rec_err
+	}
+	_, clock_err := f.Read(ar)
+	clock, _ := binary.ReadUvarint(buf)
+	if clock_err != nil {
+		return clock_err
+	}
+	_, data_err := f.Read(r.Data)
+	if data_err == nil {
+		r.AcqId = acq_id
+		r.RecId = rec_id
+		r.Clock = clock
+	}
+	return data_err
 }
