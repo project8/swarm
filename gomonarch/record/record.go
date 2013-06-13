@@ -1,16 +1,12 @@
 package record
 
 import (
-	"github.com/project8/swarm/core/types"
+//	"github.com/project8/swarm/core/types"
 )
 
 type MonarchRecord struct {
-	_AcqId types.AcqIDType
-	_RecId types.RecIDType
-	_Clock types.ClockType
-	_Data []byte
-}
-
-func AcqeId(m *MonarchRecord) uint64 {
-	
+	AcqId uint64 //types.AcqIDType
+	RecId uint64 //types.RecIDType
+	Clock uint64 //types.ClockType
+	Data []byte
 }
