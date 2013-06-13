@@ -1,4 +1,4 @@
-package Protobuf;
+package header;
 
 // The MonarchHeader class in protocol buffer form.
 message MonarchHeader
