@@ -2,7 +2,7 @@
 // source: MonarchHeader.proto
 // DO NOT EDIT!
 
-package Protobuf
+package header
 
 import proto "code.google.com/p/goprotobuf/proto"
 import json "encoding/json"
@@ -135,9 +135,9 @@ type MonarchHeader struct {
 	RecSize          *uint32                   `protobuf:"varint,5,req,name=recSize" json:"recSize,omitempty"`
 	RunDate          *string                   `protobuf:"bytes,6,opt,name=runDate,def=(unknown)" json:"runDate,omitempty"`
 	RunInfo          *string                   `protobuf:"bytes,7,opt,name=runInfo,def=(unknown)" json:"runInfo,omitempty"`
-	RunSource        *MonarchHeader_RunSource  `protobuf:"varint,8,opt,name=runSource,enum=Protobuf.MonarchHeader_RunSource" json:"runSource,omitempty"`
-	RunType          *MonarchHeader_RunType    `protobuf:"varint,9,opt,name=runType,enum=Protobuf.MonarchHeader_RunType" json:"runType,omitempty"`
-	FormatMode       *MonarchHeader_FormatMode `protobuf:"varint,10,opt,name=formatMode,enum=Protobuf.MonarchHeader_FormatMode,def=2" json:"formatMode,omitempty"`
+	RunSource        *MonarchHeader_RunSource  `protobuf:"varint,8,opt,name=runSource,enum=header.MonarchHeader_RunSource" json:"runSource,omitempty"`
+	RunType          *MonarchHeader_RunType    `protobuf:"varint,9,opt,name=runType,enum=header.MonarchHeader_RunType" json:"runType,omitempty"`
+	FormatMode       *MonarchHeader_FormatMode `protobuf:"varint,10,opt,name=formatMode,enum=header.MonarchHeader_FormatMode,def=2" json:"formatMode,omitempty"`
 	XXX_unrecognized []byte                    `json:"-"`
 }
 
@@ -220,7 +220,7 @@ func (m *MonarchHeader) GetFormatMode() MonarchHeader_FormatMode {
 }
 
 func init() {
-	proto.RegisterEnum("Protobuf.MonarchHeader_RunSource", MonarchHeader_RunSource_name, MonarchHeader_RunSource_value)
-	proto.RegisterEnum("Protobuf.MonarchHeader_RunType", MonarchHeader_RunType_name, MonarchHeader_RunType_value)
-	proto.RegisterEnum("Protobuf.MonarchHeader_FormatMode", MonarchHeader_FormatMode_name, MonarchHeader_FormatMode_value)
+	proto.RegisterEnum("header.MonarchHeader_RunSource", MonarchHeader_RunSource_name, MonarchHeader_RunSource_value)
+	proto.RegisterEnum("header.MonarchHeader_RunType", MonarchHeader_RunType_name, MonarchHeader_RunType_value)
+	proto.RegisterEnum("header.MonarchHeader_FormatMode", MonarchHeader_FormatMode_name, MonarchHeader_FormatMode_value)
 }
