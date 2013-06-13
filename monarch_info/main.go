@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"flag"
 	"log"
 	"github.com/project8/swarm/gomonarch"
@@ -25,6 +26,16 @@ func main() {
 	fmt.Printf("info for file named <%s>\n",*fname)
 	fmt.Printf("\tnumber of channels: %d\n",nc)
 	fmt.Printf("\trecord length in bytes: %d\n",rl)
+	nr := 0
+	var err error
+	for _, err = gomonarch.NextRecord(m); err == nil; _, err = gomonarch.NextRecord(m) {
+		nr += 1
+	}
+	if err != io.EOF {
+		fmt.Printf("scanning file terminated abnormally...")
+		log.Fatal(err)
+	}
+	fmt.Printf("\trecords contained: %d\n",nr)
 }
 
 func usage() (s string) {
