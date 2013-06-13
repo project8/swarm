@@ -1,60 +1,70 @@
 package gomonarch
 
-/*
-#cgo LDFLAGS: -L/Users/kofron/Code/C/monarch_c -lmonarch
-#cgo CFLAGS: -I/Users/kofron/Code/C/monarch_c/include
-
-#include <stdlib.h>
-#include "monarch.h"
-*/
-import "C"
-
 import (
-	"unsafe"
-	"errors"
+	"os"
+	"syscall"
+	"encoding/binary"
+	"code.google.com/p/goprotobuf/proto"
+	"github.com/project8/swarm/gomonarch/header"
+)
+
+type FileMode int
+const (
+	ReadMode FileMode = 1
+	WriteMode FileMode = 2
 )
 
 type Monarch struct {
-	fd *(C.monarch_fd)
+	f *os.File
+	h header.MonarchHeader
 }
 
-type MonarchRecord struct {
-	rec *(C.monarch_record)
-}
-
-func NumChannels(m *Monarch) (n int) {
-	n = int(C.monarch_n_channels(m.fd))
-	return
-}
-
-func RecordLength(m *Monarch) (n int) {
-	n = int(C.monarch_record_len(m.fd))
-	return
-}
-
-func Open(name string) (*Monarch, error) {
-	// This only opens for reading at the moment
-	var monarch *(C.monarch_fd)
-	c_fname := C.CString(name)
-	defer C.free(unsafe.Pointer(c_fname))
-	monarch = C.monarch_open(c_fname, C.read_mode)
-	if monarch == nil {
-		return nil, errors.New("couldn't open file for reading!")
+func Open(fname string, mode FileMode) (*Monarch, error) {
+	switch mode {
+	case ReadMode:
+		return open_readmode(fname)
+	case WriteMode:
+		return open_writemode(fname)
 	}
-	
-	return &Monarch{monarch}, nil
+	return nil, nil
 }
 
-func Close(monarch *Monarch) {
-	C.monarch_close(monarch.fd)
-}
-
-func NextRecord(monarch *Monarch) ([]byte, error) {
-	rec := C.monarch_new_record_alloc(4194304)
-	res := C.monarch_read_next_record(monarch.fd,rec)
-	if int(res) != 0 {
-		return nil, errors.New("oh no")
+func open_readmode(fname string) (*Monarch, error) {
+	flags := syscall.O_RDONLY
+	file, err := os.OpenFile(fname, flags, 0666)
+	if err != nil {
+		return nil, err
 	}
-	c_ar := C.monarch_record_data(rec)
-	return C.GoBytes(unsafe.Pointer(c_ar), 4194304), nil
+	var magic int64
+	magic_err := binary.Read(file, binary.LittleEndian, &magic)
+	if magic_err != nil {
+		return nil, magic_err
+	}
+	var hdr header.MonarchHeader
+	pbuf_buf := make([]byte, magic, magic)
+	_, buf_err := file.Read(pbuf_buf)
+	if buf_err != nil {
+		return nil, buf_err
+	}
+	decode_err := proto.Unmarshal(pbuf_buf, &hdr)
+	if decode_err != nil {
+		return nil, decode_err
+	}
+	return &Monarch{file, hdr}, nil
+}
+
+func open_writemode(fname string) (*Monarch, error) {
+	return nil, nil
+}
+
+func Close(m *Monarch) error {
+	return m.f.Close()
+}
+
+func NumChannels(m *Monarch) uint32 {
+	return m.h.GetAcqMode()
+}
+
+func RecordLength(m *Monarch) uint32 {
+	return m.h.GetRecSize()
 }
