@@ -119,7 +119,6 @@ func Bartlett(m *gomonarch.Monarch, c *Config) (mean, v float64, e error) {
 	f_acq := gomonarch.AcqRate(m)
 	f_nyq := f_acq/2
 	f_roi := int(math.Trunc(c.FreqBin/f_nyq*float64(c.FFTSize)))
-	fmt.Printf("%v\n",f_roi)
 
 	// we aren't interested in the entire power spectrum, so instead
 	// we will use the method due to Knuth to calculate running mean
@@ -190,7 +189,6 @@ func main() {
 		}
 		err = json.Unmarshal(bytes, env)
 	}
-	fmt.Println(env)
 
 	fs := "http://%s:%d/%s/_design/%s/_view/by_run_tag?%s"
 	url := fmt.Sprintf(fs,env.DBHost,env.DBPort,env.DBName,"general","key=\"noise_temperature_tone\"")
@@ -199,7 +197,6 @@ func main() {
 		panic("couldn't fetch run data!")
 	} 
 	data, _ := ioutil.ReadAll(r.Body)
-	fmt.Println(url)
 	
 	var v ViewResult
 	er := json.Unmarshal(data, &v)
@@ -217,11 +214,9 @@ func main() {
 			log.Printf("[ERR] couldn't open %s, skipping.", mr.Filename)
 		} else {
 			mean, variance, _ := Bartlett(m,env)
-			fmt.Printf("%v, %v\n", mean, variance)
+			fmt.Printf("%v, %v, %v\n", temp, mean, variance)
 		}
 	}
-	m, _ := gomonarch.Open("/Users/kofron/quicktest.egg",gomonarch.ReadMode)
-	Bartlett(m,env)
 }
 
 //"result": "mantis enviguration:\n  *output file name: /data/june2013_anti_00001_00000.egg\n  *digitizer rate: 500(MHz)\n  *run duration: 60000(ms)\n  *channel mode: 1(number of channels)\n  *record size: 2097152(bytes)\n  *buffer count: 640(entries)\n\npx1500 statistics:\n  * records taken: 14306\n  * acquisitions taken: 1\n  * live time: 60.0058(sec)\n  * dead time: 0(sec)\n  * total data read: 28612(Mb)\n  * average acquisition rate: 476.821(Mb/sec)\n\nwriter statistics:\n  * records written: 14306\n  * data written: 28612(Mb)\n  * live time: 60.0222(sec)\n  * average write rate: 476.69(Mb/sec)\n",
