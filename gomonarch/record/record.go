@@ -1,4 +1,4 @@
-package record
+package gomonarch
 
 import (
 //	"github.com/project8/swarm/core/types"

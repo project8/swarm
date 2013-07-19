@@ -71,13 +71,17 @@ func RecordLength(m *Monarch) uint32 {
 	return m.h.GetRecSize()
 }
 
-func NextRecord(m *Monarch) (r *record.MonarchRecord, e error) {
+func AcqRate(m *Monarch) float64 {
+	return m.h.GetAcqRate()
+}
+
+func NextRecord(m *Monarch) (r *gomonarch.MonarchRecord, e error) {
 	s := RecordLength(m)
-	r = &record.MonarchRecord{Data: make([]byte, s, s)}
+	r = &gomonarch.MonarchRecord{Data: make([]byte, s, s)}
 	return r,unmarshal_record(m.f,r)
 }
 
-func unmarshal_record(f *os.File, r *record.MonarchRecord) error {
+func unmarshal_record(f *os.File, r *gomonarch.MonarchRecord) error {
 	ar := make([]byte, 8,8)
 	buf := bytes.NewBuffer(ar)
 	_, acq_err := f.Read(ar)
