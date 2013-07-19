@@ -170,7 +170,7 @@ func Bartlett(m *gomonarch.Monarch, c *Config) (mean, v float64, e error) {
 		// we need to initialize the running calculations.  this is a little
 		// awkward but it's not that bad.
 		d2a(r.Data[0:c.FFTSize], in)
-		plan.Execute()
+		plan.ExecuteNewArray(in, out)
 		mean = cmplx.Abs(out[f_roi])
 		v = 0
 		
