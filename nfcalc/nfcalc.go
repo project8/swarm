@@ -79,6 +79,10 @@ type View struct {
 	URL string
 }
 
+type Calculation struct {
+	PhysTemp, PowerMean, PowerVariance, KH2Temp float64
+}
+
 func (c *CouchHost) URL() string {
 	return fmt.Sprintf("http://%s:%d", c.Host, c.Port)
 }
@@ -112,6 +116,32 @@ func parseMantisResult(result *MantisDoc) (*MantisDoc, error) {
 		}
 	}
 	return result, nil
+}
+
+func ProcessRuns(docs []ViewDoc, c *Config, result chan<- []Calculation) {
+	var calc Calculation
+	results := make([]Calculation, 10, 10)
+	for _, doc := range docs {
+		var term_temp, amp_temp float64
+		mr, _ := parseMantisResult(&doc.Value.MantisResult)
+		fmt.Sscanf(doc.Value.TerminatorTemp.FinalValue, "%g K", &term_temp)
+		fmt.Sscanf(doc.Value.KH2Temp.FinalValue, "%g K", &amp_temp)
+		
+		// try to open the file.
+		m, e := gomonarch.Open(mr.Filename, gomonarch.ReadMode)
+		if e != nil {
+			log.Printf("[ERR] couldn't open %s, skipping.", mr.Filename)
+		} else {
+			mean, variance, _ := Bartlett(m,c)
+			calc = Calculation{PhysTemp: term_temp, 
+				PowerMean: mean, 
+				PowerVariance: variance,
+				KH2Temp: amp_temp}
+			results = append(results, calc)
+		}
+	}
+
+	result <- results
 }
 
 func Bartlett(m *gomonarch.Monarch, c *Config) (mean, v float64, e error) {
@@ -223,20 +253,31 @@ func main() {
 	if er != nil {
 		panic(er)
 	}
-	
-	for _, run := range v.Docs {
-		var temp float64
-		mr, _ := parseMantisResult(&run.Value.MantisResult)
-		fmt.Sscanf(run.Value.TerminatorTemp.FinalValue, "%g K", &temp)
-		// try to open the file.
-		m, e := gomonarch.Open(mr.Filename, gomonarch.ReadMode)
-		if e != nil {
-			log.Printf("[ERR] couldn't open %s, skipping.", mr.Filename)
-		} else {
-			mean, variance, _ := Bartlett(m,env)
-			fmt.Printf("%v, %v, %v\n", temp, mean, variance)
-		}
+
+	//  Figure out how to split up work.
+	n := env.NWorkers
+	m := len(v.Docs)
+
+	// Divide m by n first
+	num_per := int(math.Floor(float64(m)/float64(n)))
+
+	// Send out the work.
+	ch := make(chan []Calculation, n)
+	var idx0, idx1 int
+	for i := 0; i < (n-1); i++ {
+		idx0 = i*num_per
+		idx1 = (i+1)*num_per
+		go ProcessRuns(v.Docs[idx0:idx1], env, ch)
 	}
+	go ProcessRuns(v.Docs[(idx1+1):len(v.Docs)], env, ch)
+
+	var result []Calculation
+	results := make([]Calculation, 0, len(v.Docs))
+	for i := 0; i < n; i++ {
+		result = <- ch
+		results = append(results, result...)
+	}
+	fmt.Println(results)
 }
 
 //"result": "mantis enviguration:\n  *output file name: /data/june2013_anti_00001_00000.egg\n  *digitizer rate: 500(MHz)\n  *run duration: 60000(ms)\n  *channel mode: 1(number of channels)\n  *record size: 2097152(bytes)\n  *buffer count: 640(entries)\n\npx1500 statistics:\n  * records taken: 14306\n  * acquisitions taken: 1\n  * live time: 60.0058(sec)\n  * dead time: 0(sec)\n  * total data read: 28612(Mb)\n  * average acquisition rate: 476.821(Mb/sec)\n\nwriter statistics:\n  * records written: 14306\n  * data written: 28612(Mb)\n  * live time: 60.0222(sec)\n  * average write rate: 476.69(Mb/sec)\n",
