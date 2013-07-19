@@ -120,6 +120,9 @@ func Bartlett(m *gomonarch.Monarch, c *Config) (mean, v float64, e error) {
 	f_nyq := f_acq/2
 	f_roi := int(math.Trunc(c.FreqBin/f_nyq*float64(c.FFTSize)))
 
+	// We need to know when we are going to "overflow" a record.
+	r_len := int(gomonarch.RecordLength(m))
+
 	// we aren't interested in the entire power spectrum, so instead
 	// we will use the method due to Knuth to calculate running mean
 	// and standard deviation as we accumulate power spectra.  this
@@ -131,32 +134,49 @@ func Bartlett(m *gomonarch.Monarch, c *Config) (mean, v float64, e error) {
 	in := fftw.Alloc1d(c.FFTSize)
 	out := fftw.Alloc1d(c.FFTSize)
 	plan := fftw.PlanDft1d(in, out, fftw.Forward, fftw.Estimate)
-	r, _ := gomonarch.NextRecord(m)
-
-	// we need to initialize the running calculations.  this is a little
-	// awkward but it's not that bad.
-	d2a(r.Data[0:c.FFTSize], in)
-	plan.Execute()
-	mean = cmplx.Abs(out[f_roi])
-	v = 0
-
-	var x, lastm float64
-	for k := 1; k < c.NAvg; k++ {
-		idx0 := k*c.FFTSize
-		idx1 := (k+1)*c.FFTSize
-		d2a(r.Data[idx0:idx1],in)
+	r, er := gomonarch.NextRecord(m)
+	if e == nil {
+		// we need to initialize the running calculations.  this is a little
+		// awkward but it's not that bad.
+		d2a(r.Data[0:c.FFTSize], in)
 		plan.Execute()
-
-		// OK, now we grab the bin we care about and re-calculate
-		// the running mean and variance.
-		x = cmplx.Abs(out[f_roi])
-		lastm = mean
-		mean = mean + (x - mean)/float64(k)
-		v = v + (x - lastm)*(x - mean)
+		mean = cmplx.Abs(out[f_roi])
+		v = 0
+		
+		var l int = 1
+		var x, lastm float64
+		var idx0, idx1 int
+		for k := 1; k < c.NAvg; k++ {
+			idx0 = l*c.FFTSize 
+			idx1 = (l+1)*c.FFTSize 
+			if idx1 > r_len {
+				r, er = gomonarch.NextRecord(m)
+				if er != nil {
+					e = er
+					return
+				} 
+				l = 0
+				idx0 = 0
+				idx1 = c.FFTSize
+			}
+			d2a(r.Data[idx0:idx1],in)
+			plan.Execute()
+			
+			// OK, now we grab the bin we care about and re-calculate
+			// the running mean and variance.
+			x = cmplx.Abs(out[f_roi])
+			lastm = mean
+			mean = mean + (x - mean)/float64(k)
+			v = v + (x - lastm)*(x - mean)
+			l++
+		}
+		
+		v /= float64(c.NAvg - 1)
+	} else {
+		mean = 0
+		v = 0
+		e = er
 	}
-	
-	v /= float64(c.NAvg - 1)
-
 	return
 }
 
