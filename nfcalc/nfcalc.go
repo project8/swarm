@@ -120,7 +120,7 @@ func parseMantisResult(result *MantisDoc) (*MantisDoc, error) {
 
 func ProcessRuns(docs []ViewDoc, c *Config, result chan<- []Calculation) {
 	var calc Calculation
-	results := make([]Calculation, 10, 10)
+	results := make([]Calculation, 0, 10)
 	for _, doc := range docs {
 		var term_temp, amp_temp float64
 		mr, _ := parseMantisResult(&doc.Value.MantisResult)
