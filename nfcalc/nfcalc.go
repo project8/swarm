@@ -29,6 +29,7 @@ type Config struct {
 	NWorkers   int   `json:"num_workers"`
 	DataLocation string `json:"local_data_dir"`
 	FreqBin float64 `json:"freq"`
+	FFTWPlan *fftw.Plan
 }
 
 type ViewDoc struct {
@@ -163,7 +164,7 @@ func Bartlett(m *gomonarch.Monarch, c *Config) (mean, v float64, e error) {
 	//      s_k = s_(k-1) + (x_k - m_(k-1))*(x_k - m_k)
 	in := fftw.Alloc1d(c.FFTSize)
 	out := fftw.Alloc1d(c.FFTSize)
-	plan := fftw.PlanDft1d(in, out, fftw.Forward, fftw.Estimate)
+	plan := c.FFTWPlan
 	r, er := gomonarch.NextRecord(m)
 	if e == nil {
 		// we need to initialize the running calculations.  this is a little
@@ -253,6 +254,12 @@ func main() {
 	if er != nil {
 		panic(er)
 	}
+
+	// As in all things, we need a plan.
+	in := fftw.Alloc1d(env.FFTSize)
+	out := fftw.Alloc1d(env.FFTSize)
+	plan := fftw.PlanDft1d(in, out, fftw.Forward, fftw.Estimate)
+	env.FFTWPlan = plan
 
 	//  Figure out how to split up work.
 	n := env.NWorkers
