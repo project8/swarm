@@ -1,24 +1,37 @@
 package main
 
 import(
-	"fmt"
-	"github.com/project8/gomonarch"
+	"github.com/project8/swarm/gomonarch"
+	"code.google.com/p/plotinum/plotter"
+	"code.google.com/p/plotinum/plot"
 )
 
 func main () {
-	m, err := gomonarch.Open("/Users/kofron/quicktest.egg")
+	m, err := gomonarch.Open("/Users/project8/quicktest.egg",gomonarch.ReadMode)
 	if err == nil {
 		defer gomonarch.Close(m)
 	}
 
-	hist := make([]int, 256, 256)
+	hist := make(plotter.Values, 100000)
 	rec1, recerr := gomonarch.NextRecord(m)
 	if recerr == nil {
-		for _, recval := range(rec1) {
-			hist[recval] += 1
+		for pos, _ := range(hist) {
+			hist[pos] += float64(rec1.Data[pos])
 		}
 	}
-	for pos, val := range(hist) {
-		fmt.Printf("%d, %d\n", pos, val)
+
+	p, err := plot.New()
+	if err != nil {
+		panic(err)
+	}
+	p.Title.Text = "ADC Counts"
+	h, err := plotter.NewHist(hist, 100)
+	if err != nil {
+		panic(err)
+	}
+	p.Add(h)
+
+	if err := p.Save(4,4,"adc_hist.png"); err != nil {
+		panic(err)
 	}
 }
