@@ -1,13 +1,24 @@
 package main
 
 import(
+	"flag"
+	"log"
 	"github.com/project8/swarm/gomonarch"
 	"code.google.com/p/plotinum/plotter"
 	"code.google.com/p/plotinum/plot"
 )
 
 func main () {
-	m, err := gomonarch.Open("/Users/project8/quicktest.egg",gomonarch.ReadMode)
+	var fname = flag.String("file_in","","Input file name")
+	var iname = flag.String("image_out","adc_hist.png","Output image file name")
+	flag.Parse()
+
+	if *fname == "" {
+		log.Print("Input filename must be specified!")
+		return
+	}
+
+	m, err := gomonarch.Open(*fname,gomonarch.ReadMode)
 	if err == nil {
 		defer gomonarch.Close(m)
 	}
@@ -31,7 +42,7 @@ func main () {
 	}
 	p.Add(h)
 
-	if err := p.Save(4,4,"adc_hist.png"); err != nil {
+	if err := p.Save(8,8,*iname); err != nil {
 		panic(err)
 	}
 }
