@@ -2,7 +2,7 @@ package main
 
 import(
 	"fmt"
-	"github.com/project8/gomonarch"
+	"github.com/project8/swarm/gomonarch"
 )
 
 func main () {
