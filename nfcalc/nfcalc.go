@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/project8/swarm/gomonarch"
+	"github.com/project8/swarm/runningstat"
 	"github.com/kofron/go-fftw"
 	"io/ioutil"
 	"net/http"
@@ -208,6 +209,10 @@ func ProcessRuns(docs []ViewDoc, c *Config, result chan<- []Calculation) {
 }
 
 func Bartlett(m *gomonarch.Monarch, c *Config) (mean, v float64, e error) {
+	// to calculate running statistics
+	var stats runningstat.StatRunner
+	stats.Reset()
+
 	// First, which bin are we interested in?
 	f_acq := gomonarch.AcqRate(m)
 	f_nyq := f_acq/2
@@ -233,11 +238,10 @@ func Bartlett(m *gomonarch.Monarch, c *Config) (mean, v float64, e error) {
 		// awkward but it's not that bad.
 		d2a(r.Data[0:c.FFTSize], in)
 		plan.ExecuteNewArray(in, out)
-		mean = cmplx.Abs(out[f_roi])
-		v = 0
+		stats.Update(cmplx.Abs(out[f_roi]))
 		
 		var l int = 1
-		var x, lastm float64
+		var x float64
 		var idx0, idx1 int
 		for k := 1; k < c.NAvg; k++ {
 			idx0 = l*c.FFTSize 
@@ -258,16 +262,12 @@ func Bartlett(m *gomonarch.Monarch, c *Config) (mean, v float64, e error) {
 			// OK, now we grab the bin we care about and re-calculate
 			// the running mean and variance.
 			x = cmplx.Abs(out[f_roi])
-			lastm = mean
-			mean = mean + (x - mean)/float64(k)
-			v = v + (x - lastm)*(x - mean)
+			stats.Update(x)
 			l++
 		}
-		
-		v /= float64(c.NAvg - 1)
 	} else {
-		mean = 0
-		v = 0
+		mean = stats.Mean()
+		v = stats.Variance()
 		e = er
 	}
 	return
