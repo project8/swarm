@@ -101,61 +101,6 @@ func (d *Database) NewView(design, name string) *View {
 
 }
 
-var Cernox87821 = []Point2d{
-	// log(R), log(T)
-	Point2d{X: math.Log(56.21), Y: math.Log(276.33)},
-	Point2d{X: math.Log(133.62), Y: math.Log(77.0)},
-	Point2d{X: math.Log(1764.0), Y: math.Log(4.2)},
-}
-
-type Calibrator interface {
-	Calibrate(float64) float64
-}
-
-type Point2d struct {
-	X, Y float64
-}
-
-type Cernox struct {
-	CalPts []Point2d
-}
-
-func (c *Cernox) Calibrate(Ω float64) (K float64) {
-	logΩ := math.Log(Ω)
-	pt1, pt2 := find_interval(logΩ, c.CalPts)
-	slope, icept := linear_fit(pt1, pt2)
-	logT := interpolate(slope,icept, logΩ)
-	return math.Exp(logT)
-}
-
-func interpolate(m, b, x float64) float64 {
-	return (m*x + b)
-}
-
-func linear_fit(pt1, pt2 Point2d) (m, b float64) {
-	m = (pt2.Y - pt1.Y)/(pt2.X - pt1.X)
-	b = pt2.Y - m*pt2.X
-	return
-}
-
-func find_interval(pt float64, points []Point2d) (Point2d,Point2d) {
-	// Assumes points are sorted from low to high T!
-	// If the first point is larger than the first element
-	// in points, return the first element.  If not, iterate
-	// through until we find the appropriate one.  If we get
-	// all the way to the end, return the last element.
-	if pt < points[0].X {
-		return points[0], points[1]
-	} else {
-		for i := 1; i < len(points) - 1; i++ {
-			if (pt >= points[i].X && pt < points[i+1].X ) {
-				return points[i], points[i+1]
-			} 
-		}
-	}
-	return points[len(points)-2], points[len(points)-1]
-}
-
 func d2a(input []byte, output []complex128) {
 	var v float64
 	for pos, _ := range input {
@@ -350,5 +295,3 @@ func main() {
 	    fmt.Printf("%v, %v, %v, %v\n",res.PhysTemp, res.KH2Temp, res.PowerMean, res.PowerVariance)
 	}	
 }
-
-//"result": "mantis enviguration:\n  *output file name: /data/june2013_anti_00001_00000.egg\n  *digitizer rate: 500(MHz)\n  *run duration: 60000(ms)\n  *channel mode: 1(number of channels)\n  *record size: 2097152(bytes)\n  *buffer count: 640(entries)\n\npx1500 statistics:\n  * records taken: 14306\n  * acquisitions taken: 1\n  * live time: 60.0058(sec)\n  * dead time: 0(sec)\n  * total data read: 28612(Mb)\n  * average acquisition rate: 476.821(Mb/sec)\n\nwriter statistics:\n  * records written: 14306\n  * data written: 28612(Mb)\n  * live time: 60.0222(sec)\n  * average write rate: 476.69(Mb/sec)\n",
