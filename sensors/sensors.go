@@ -1,7 +1,7 @@
 package sensors
 
 type Calibrator interface {
-	Calibrate(float64) float64
+	Calibrate(interface{}) float64
 }
 
 type Point2d struct {
