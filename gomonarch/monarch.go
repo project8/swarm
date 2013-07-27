@@ -59,24 +59,24 @@ func open_writemode(fname string) (*Monarch, error) {
 	return nil, nil
 }
 
-func Close(m *Monarch) error {
+func (m *Monarch) Close() error {
 	return m.f.Close()
 }
 
-func NumChannels(m *Monarch) uint32 {
+func (m *Monarch) NumChannels() uint32 {
 	return m.h.GetAcqMode()
 }
 
-func RecordLength(m *Monarch) uint32 {
+func (m *Monarch) RecordLength() uint32 {
 	return m.h.GetRecSize()
 }
 
-func AcqRate(m *Monarch) float64 {
+func (m *Monarch) AcqRate() float64 {
 	return m.h.GetAcqRate()
 }
 
-func NextRecord(m *Monarch) (r *gomonarch.MonarchRecord, e error) {
-	s := RecordLength(m)
+func (m *Monarch) NextRecord() (r *gomonarch.MonarchRecord, e error) {
+	s := m.RecordLength()
 	r = &gomonarch.MonarchRecord{Data: make([]byte, s, s)}
 	return r,unmarshal_record(m.f,r)
 }
