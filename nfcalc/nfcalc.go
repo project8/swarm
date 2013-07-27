@@ -167,14 +167,6 @@ func Bartlett(m *gomonarch.Monarch, c *Config) (mean, v float64, e error) {
 	// We need to know when we are going to "overflow" a record.
 	r_len := int(gomonarch.RecordLength(m))
 
-	// we aren't interested in the entire power spectrum, so instead
-	// we will use the method due to Knuth to calculate running mean
-	// and standard deviation as we accumulate power spectra.  this
-	// holds the amount of data we need to keep around to a single
-	// power spectrum and two floats.
-	// the recurrence is 
-	//      m_k = m_(k-1) + (x_k - m_(k-1)/k)
-	//      s_k = s_(k-1) + (x_k - m_(k-1))*(x_k - m_k)
 	in := fftw.Alloc1d(c.FFTSize)
 	out := fftw.Alloc1d(c.FFTSize)
 	plan := c.FFTWPlan
