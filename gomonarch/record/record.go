@@ -1,8 +1,4 @@
-package gomonarch
-
-import (
-//	"github.com/project8/swarm/core/types"
-)
+package record
 
 type MonarchRecord struct {
 	AcqId uint64 //types.AcqIDType
