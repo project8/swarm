@@ -75,13 +75,13 @@ func (m *Monarch) AcqRate() float64 {
 	return m.h.GetAcqRate()
 }
 
-func (m *Monarch) NextRecord() (r *gomonarch.MonarchRecord, e error) {
+func (m *Monarch) NextRecord() (r *record.MonarchRecord, e error) {
 	s := m.RecordLength()
-	r = &gomonarch.MonarchRecord{Data: make([]byte, s, s)}
+	r = &record.MonarchRecord{Data: make([]byte, s, s)}
 	return r,unmarshal_record(m.f,r)
 }
 
-func unmarshal_record(f *os.File, r *gomonarch.MonarchRecord) error {
+func unmarshal_record(f *os.File, r *record.MonarchRecord) error {
 	ar := make([]byte, 8,8)
 	buf := bytes.NewBuffer(ar)
 	_, acq_err := f.Read(ar)
