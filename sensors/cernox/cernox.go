@@ -1,7 +1,6 @@
 package cernox
 
 import (
-	"fmt"
 	"math"
 	s "github.com/project8/swarm/sensors"
 )
@@ -13,7 +12,6 @@ type Cernox struct {
 func (c *Cernox) Calibrate(Ω float64) (K float64) {
 	logΩ := math.Log(Ω)
 	pt1, pt2 := find_interval(logΩ, c.CalPts)
-	fmt.Println(logΩ,pt1, pt2)
 	slope, icept := linear_fit(pt1, pt2)
 	logT := interpolate(slope,icept, logΩ)
 	return math.Exp(logT)
