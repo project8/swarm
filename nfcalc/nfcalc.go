@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/project8/swarm/gomonarch"
 	"github.com/project8/swarm/runningstat"
+	"github.com/project8/swarm/sensors/cernox"
 	"github.com/kofron/go-fftw"
 	"io/ioutil"
 	"net/http"
@@ -123,8 +124,8 @@ func parseMantisResult(result *MantisDoc) (*MantisDoc, error) {
 
 func ProcessRuns(docs []ViewDoc, c *Config, result chan<- []Calculation) {
 	var calc Calculation
-	results := make([]Calculation, 0, 10)
-	termCal := Cernox{CalPts: Cernox87821}
+	results := make([]Calculation, 0, len(docs))
+	termCal := cernox.Cernox{CalPts: cernox.Cernox87821}
 	for _, doc := range docs {
 		var term_temp, amp_temp float64
 		mr, _ := parseMantisResult(&doc.Value.MantisResult)
@@ -181,12 +182,13 @@ func Bartlett(m *gomonarch.Monarch, c *Config) (mean, v float64, e error) {
 	if e == nil {
 		// we need to initialize the running calculations.  this is a little
 		// awkward but it's not that bad.
+		var x float64
 		d2a(r.Data[0:c.FFTSize], in)
 		plan.ExecuteNewArray(in, out)
-		stats.Update(cmplx.Abs(out[f_roi]))
+		x = cmplx.Abs(out[f_roi])
+		stats.Update(x)
 		
 		var l int = 1
-		var x float64
 		var idx0, idx1 int
 		for k := 1; k < c.NAvg; k++ {
 			idx0 = l*c.FFTSize 
@@ -211,10 +213,11 @@ func Bartlett(m *gomonarch.Monarch, c *Config) (mean, v float64, e error) {
 			l++
 		}
 	} else {
-		mean = stats.Mean()
-		v = stats.Variance()
 		e = er
 	}
+	mean = stats.Mean()
+	v = stats.Variance()	
+
 	return
 }
 
