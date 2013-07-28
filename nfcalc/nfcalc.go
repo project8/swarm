@@ -278,7 +278,7 @@ func main() {
 	// Loop over bins, at each bin use all physical temps,
 	// plus the mean power in the bin at each temp for the
 	// X,Y pairs.  Then linear fit.
-	for bin := 0; bin < env.FFTSize; bin++ {
+	for bin := 0; bin < env.FFTSize/2; bin++ {
 		t0, p0 := results[0].PhysTemp, results[0].PowerStats[bin].Mean()
 		f_nyq := results[0].NyquistFreq
 		
