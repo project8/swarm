@@ -277,9 +277,11 @@ func main() {
 	// plus the mean power in the bin at each temp for the
 	// X,Y pairs.  Then linear fit.
 	for bin := 0; bin < env.FFTSize; bin++ {
+		t0, p0 := results[0].PhysTemp, results[0].PowerStats[bin].Mean()
+		
 		for pos, res := range results {
-			t[pos] = res.PhysTemp
-			p[pos] = res.PowerStats[bin].Mean()
+			t[pos] = res.PhysTemp/t0
+			p[pos] = res.PowerStats[bin].Mean()/p0
 		}
 
 		f, fit_err := fit.FitLinear(&t,&p,1,1)
