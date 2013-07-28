@@ -187,12 +187,12 @@ func Bartlett(m *gomonarch.Monarch, c *Config) (s []runningstat.StatRunner, e er
 		}
 
 		plan.ExecuteNewArray(in, out)
-		for p, v := range s {
-			v.Update(cmplx.Abs(out[p]))
+		for p := 0; p < c.FFTSize; p++ {
+		    s[p].Update(cmplx.Abs(out[p]))
 		}
 	}
-	
-	return
+
+	return s, nil
 }
 
 /*
