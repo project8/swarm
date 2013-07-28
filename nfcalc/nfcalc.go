@@ -10,6 +10,7 @@ import (
 	"github.com/project8/swarm/sensors/cernox"
 	"github.com/project8/swarm/sensors/px1500"
 	"github.com/kofron/go-fftw"
+	"github.com/kofron/gogsl/fit"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -268,14 +269,30 @@ func main() {
 		result = <- ch
 		results = append(results, result...)
 	}
-	for _, res := range results {
-	    for i := 0; i < env.FFTSize; i++ {
-	    	fmt.Printf("%v, %v, %d, %v\n",
-		    res.PhysTemp, 
-		    res.KH2Temp,
-		    i,
-		    res.PowerStats[i].Mean())
-	    }	    
-	   
-	}	
+
+	t := make([]float64, len(results), len(results))
+	p := make([]float64, len(results), len(results))
+
+	// Loop over bins, at each bin use all physical temps,
+	// plus the mean power in the bin at each temp for the
+	// X,Y pairs.  Then linear fit.
+	for bin := 0; bin < env.FFTSize; bin++ {
+		for pos, res := range results {
+			t[pos] = res.PhysTemp
+			p[pos] = res.PowerStats[bin].Mean()
+		}
+
+		f, fit_err := fit.FitLinear(&t,&p,1,1)
+		if fit_err != nil {
+			log.Print("[ERR] fit failed, skipping.")
+		} else {
+			γ := f.Y0/f.Slope
+			fmt.Printf("%d, %f, %f, %f, %f\n",
+				bin,
+				f.Y0,
+				f.Slope,
+				γ,
+				f.SumSq)
+		}
+	}
 }
