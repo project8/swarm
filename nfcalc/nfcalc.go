@@ -269,9 +269,13 @@ func main() {
 		results = append(results, result...)
 	}
 	for _, res := range results {
-	    fmt.Printf("%v, %v, %v, %v\n",
+	    for i := 0; i < env.FFTSize; i++ {
+	    	fmt.Printf("%v, %v, %d, %v\n",
 		    res.PhysTemp, 
 		    res.KH2Temp,
-		    res.PowerStats)
+		    i,
+		    res.PowerStats[i].Mean())
+	    }	    
+	   
 	}	
 }
