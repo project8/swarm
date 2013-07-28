@@ -88,7 +88,7 @@ type View struct {
 
 type Calculation struct {
 	PowerStats []runningstat.StatRunner
-	PhysTemp, KH2Temp float64
+	NyquistFreq, PhysTemp, KH2Temp float64
 }
 
 func (c *CouchHost) URL() string {
@@ -141,6 +141,7 @@ func ProcessRuns(docs []ViewDoc, c *Config, result chan<- []Calculation) {
 		if e != nil {
 			log.Printf("[ERR] couldn't open %s, skipping.", mr.Filename)
 		} else {
+			f_nyq = m.AcqRate()/2.0
 			term_temp = termCal.Calibrate(term_temp)
 			if math.IsInf(term_temp,0) {
 				log.Printf("[ERR] bad terminator temp, skipping.")
@@ -148,7 +149,8 @@ func ProcessRuns(docs []ViewDoc, c *Config, result chan<- []Calculation) {
 				s, _ := Bartlett(m,c)
 				calc = Calculation{PhysTemp: term_temp, 
 					PowerStats: s,
-					KH2Temp: amp_temp}
+					KH2Temp: amp_temp,
+					NyquistFreq: f_nyq,}
 				results = append(results, calc)
 			}
 		}
@@ -278,6 +280,7 @@ func main() {
 	// X,Y pairs.  Then linear fit.
 	for bin := 0; bin < env.FFTSize; bin++ {
 		t0, p0 := results[0].PhysTemp, results[0].PowerStats[bin].Mean()
+		f_nyq := results[0].NyquistFreq
 		
 		for pos, res := range results {
 			t[pos] = res.PhysTemp/t0
@@ -289,8 +292,10 @@ func main() {
 			log.Print("[ERR] fit failed, skipping.")
 		} else {
 			γ := f.Y0/f.Slope
-			fmt.Printf("%d, %f, %f, %f, %f\n",
+			freq = (float64)(bin)/(float64)(env.FFTSize)*f_nyq
+			fmt.Printf("%d, %f, %f, %f, %f, %f, %f\n",
 				bin,
+				freq,
 				f.Y0,
 				f.Slope,
 				γ*t0,
