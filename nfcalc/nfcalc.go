@@ -5,8 +5,10 @@ import (
 	"flag"
 	"fmt"
 	"github.com/project8/swarm/gomonarch"
+	"github.com/project8/swarm/gomonarch/frame"
 	"github.com/project8/swarm/runningstat"
 	"github.com/project8/swarm/sensors/cernox"
+	"github.com/project8/swarm/sensors/px1500"
 	"github.com/kofron/go-fftw"
 	"io/ioutil"
 	"net/http"
@@ -84,7 +86,8 @@ type View struct {
 }
 
 type Calculation struct {
-	PhysTemp, PowerMean, PowerVariance, KH2Temp float64
+	PowerStats []runningstat.StatRunner
+	PhysTemp, KH2Temp float64
 }
 
 func (c *CouchHost) URL() string {
@@ -141,10 +144,9 @@ func ProcessRuns(docs []ViewDoc, c *Config, result chan<- []Calculation) {
 			if math.IsInf(term_temp,0) {
 				log.Printf("[ERR] bad terminator temp, skipping.")
 			} else {
-				mean, variance, _ := Bartlett(m,c)
+				s, _ := Bartlett(m,c)
 				calc = Calculation{PhysTemp: term_temp, 
-					PowerMean: mean, 
-					PowerVariance: variance,
+					PowerStats: s,
 					KH2Temp: amp_temp}
 				results = append(results, calc)
 			}
@@ -154,62 +156,42 @@ func ProcessRuns(docs []ViewDoc, c *Config, result chan<- []Calculation) {
 	result <- results
 }
 
-func Bartlett(m *gomonarch.Monarch, c *Config) (mean, v float64, e error) {
+func Bartlett(m *gomonarch.Monarch, c *Config) (s []runningstat.StatRunner, e error) {
 	// to calculate running statistics
-	var stats runningstat.StatRunner
-	stats.Reset()
+	s = make([]runningstat.StatRunner, c.FFTSize, c.FFTSize)
+	for _, val := range s {
+		val.Reset()
+	}
 
-	// First, which bin are we interested in?
-	f_acq := gomonarch.AcqRate(m)
-	f_nyq := f_acq/2
-	f_roi := int(math.Trunc(c.FreqBin/f_nyq*float64(c.FFTSize)))
-
-	// We need to know when we are going to "overflow" a record.
-	r_len := int(gomonarch.RecordLength(m))
+	fr, fr_err := frame.NewFramer(m, uint64(c.FFTSize))
+	if fr_err != nil {
+		e = fr_err
+		return
+	}
 
 	in := fftw.Alloc1d(c.FFTSize)
 	out := fftw.Alloc1d(c.FFTSize)
 	plan := c.FFTWPlan
-	r, er := gomonarch.NextRecord(m)
-	if e == nil {
-		// we need to initialize the running calculations.  this is a little
-		// awkward but it's not that bad.
-		var x float64
-		d2a(r.Data[0:c.FFTSize], in)
-		plan.ExecuteNewArray(in, out)
-		x = cmplx.Abs(out[f_roi])
-		stats.Update(x)
-		
-		var l int = 1
-		var idx0, idx1 int
-		for k := 1; k < c.NAvg; k++ {
-			idx0 = l*c.FFTSize 
-			idx1 = (l+1)*c.FFTSize 
-			if idx1 > r_len {
-				r, er = gomonarch.NextRecord(m)
-				if er != nil {
-					e = er
-					return
-				} 
-				l = 0
-				idx0 = 0
-				idx1 = c.FFTSize
-			}
-			d2a(r.Data[idx0:idx1],in)
-			plan.ExecuteNewArray(in, out)
-			
-			// OK, now we grab the bin we care about and re-calculate
-			// the running mean and variance.
-			x = cmplx.Abs(out[f_roi])
-			stats.Update(x)
-			l++
-		}
-	} else {
-		e = er
-	}
-	mean = stats.Mean()
-	v = stats.Variance()	
 
+	p := px1500.PX1500{}
+
+	for i := 0; i < c.NAvg; i++ {
+		f, ok := fr.Advance()
+		if ok != nil {
+			e = ok
+			break
+		}
+
+		for pos, v := range f.Data {
+			in[pos] = complex(p.Calibrate(v), 0)
+		}
+
+		plan.ExecuteNewArray(in, out)
+		for p, v := range s {
+			v.Update(cmplx.Abs(out[p]))
+		}
+	}
+	
 	return
 }
 
@@ -287,6 +269,9 @@ func main() {
 		results = append(results, result...)
 	}
 	for _, res := range results {
-	    fmt.Printf("%v, %v, %v, %v\n",res.PhysTemp, res.KH2Temp, res.PowerMean, res.PowerVariance)
+	    fmt.Printf("%v, %v, %v, %v\n",
+		    res.PhysTemp, 
+		    res.KH2Temp,
+		    res.PowerStats)
 	}	
 }
