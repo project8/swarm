@@ -293,7 +293,7 @@ func main() {
 				bin,
 				f.Y0,
 				f.Slope,
-				γ,
+				γ*t0,
 				f.SumSq)
 		}
 	}
