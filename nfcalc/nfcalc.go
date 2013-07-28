@@ -141,7 +141,7 @@ func ProcessRuns(docs []ViewDoc, c *Config, result chan<- []Calculation) {
 		if e != nil {
 			log.Printf("[ERR] couldn't open %s, skipping.", mr.Filename)
 		} else {
-			f_nyq = m.AcqRate()/2.0
+			f_nyq := m.AcqRate()/2.0
 			term_temp = termCal.Calibrate(term_temp)
 			if math.IsInf(term_temp,0) {
 				log.Printf("[ERR] bad terminator temp, skipping.")
@@ -292,7 +292,7 @@ func main() {
 			log.Print("[ERR] fit failed, skipping.")
 		} else {
 			γ := f.Y0/f.Slope
-			freq = (float64)(bin)/(float64)(env.FFTSize)*f_nyq
+			freq := (float64)(bin)/(float64)(env.FFTSize)*f_nyq
 			fmt.Printf("%d, %f, %f, %f, %f, %f, %f\n",
 				bin,
 				freq,
