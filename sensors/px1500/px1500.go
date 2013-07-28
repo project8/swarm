@@ -17,8 +17,6 @@ func (p *PX1500) Calibrate(v interface{}) (f float64) {
 	switch v.(type) {
 	case byte:
 		f = adc_count_to_voltage(v.(byte))
-	case float64:
-		f = power_spec_to_mw(v.(float64))
 	default:
 	}
 	return
@@ -26,8 +24,4 @@ func (p *PX1500) Calibrate(v interface{}) (f float64) {
 
 func adc_count_to_voltage(b byte) float64 {
 	return adc_min + adc_range*float64(b)/float64(n_levels - 1)
-}
-
-func power_spec_to_mw(f float64) float64 {
-	return 0.0
 }
