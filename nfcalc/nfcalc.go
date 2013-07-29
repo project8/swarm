@@ -305,7 +305,7 @@ func main() {
 			γ := f.Y0/f.Slope
 			freq := (float64)(bin)/(float64)(env.FFTSize)*f_nyq
 			fmt.Fprintf(fit_out,
-				"%d, %f, %f, %f, %f, %f\n",
+				"%d, %e, %e, %e, %e, %e\n",
 				bin,
 				freq,
 				f.Y0,
@@ -331,7 +331,7 @@ func main() {
 	for res := 0; res < len(results); res++ {
 		for bin := 0; bin < env.FFTSize/2; bin++ {
 			fmt.Fprintf(ps_out,
-				"%d, %d, %f, %f\n",
+				"%d, %d, %e, %e\n",
 				res,
 				bin,
 				results[res].PowerStats[bin].Mean(),
