@@ -288,7 +288,7 @@ func main() {
 	}
 	defer fit_out.Close()
 
-	fmt.Fprintf(fit_out, "bin, freq, icept, slope, temp, sum_squares")
+	fmt.Fprintf(fit_out, "bin, freq, icept, slope, temp, sum_squares\n")
 	for bin := 0; bin < env.FFTSize/2; bin++ {
 		t0, p0 := results[0].PhysTemp, results[0].PowerStats[bin].Mean()
 		f_nyq := results[0].NyquistFreq
