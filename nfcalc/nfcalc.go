@@ -293,7 +293,8 @@ func main() {
 	}
 	defer fit_out.Close()
 
-	fmt.Fprintf(fit_out, "bin, freq, icept, slope, temp, sum_squares, gain\n")
+	n_t := make([]float64, env.FFTSize, env.FFTSize)
+	fmt.Fprintf(fit_out, "bin, freq, icept, slope, temp, sum_squares\n")
 	for bin := 0; bin < env.FFTSize/2; bin++ {
 		t0, p0 := results[0].PhysTemp, results[0].PowerStats[bin].Mean()
 		f_nyq := results[0].NyquistFreq
@@ -308,27 +309,17 @@ func main() {
 			log.Print("[ERR] fit failed, skipping.")
 		} else {
 			γ := f.Y0/f.Slope
-			n_t := γ*t0
+			n_t[bin] = γ*t0
 			freq := (float64)(bin)/(float64)(env.FFTSize)*f_nyq
 
-			// We can calculate gain now here.
-			// We know P = G*k*B*(T0 + Ta).
-			// We found Ta above, T0 is just the physical
-			// temperature.
-			// So P/(kBT) = G.
-			pow := res.PowerStats[bin].Mean()*norm
-			bw := f_nyq/(float64)(env.FFTSize)
-			g := pow/(kB*(n_t + res.PhysTemp)*bw)
-
 			fmt.Fprintf(fit_out,
-				"%d, %e, %e, %e, %e, %e, %e\n",
+				"%d, %e, %e, %e, %e, %e\n",
 				bin,
 				freq,
 				f.Y0,
 				f.Slope,
 				n_t,
-				f.SumSq,
-				g)
+				f.SumSq)
 		}
 	}
 
@@ -342,13 +333,24 @@ func main() {
 	}
 	defer ps_out.Close()
 
-	fmt.Fprintf(ps_out, "result, fft_bin, power, power_norm\n")
+	fmt.Fprintf(ps_out, "result, fft_bin, gain, power, power_norm\n")
 	for res := 0; res < len(results); res++ {
+		f_nyq := results[res].NyquistFreq
 		for bin := 0; bin < env.FFTSize/2; bin++ {
+			// We can calculate gain now here.
+			// We know P = G*k*B*(T0 + Ta).
+			// We found Ta above, T0 is just the physical
+			// temperature.
+			// So P/(kBT) = G.
+			pow := results[res].PowerStats[bin].Mean()*norm
+			bw := f_nyq/(float64)(env.FFTSize)
+			g := pow/(kB*(n_t[bin] + results[res].PhysTemp)*bw)
+
 			fmt.Fprintf(ps_out,
-				"%d, %d, %e, %e\n",
+				"%d, %d, %e, %e, %e\n",
 				res,
 				bin,
+				g,
 				results[res].PowerStats[bin].Mean(),
 				norm*results[res].PowerStats[bin].Mean())
 		}
