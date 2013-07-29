@@ -327,7 +327,7 @@ func main() {
 
 	fmt.Fprintf(ps_out, "result, fft_bin, power, power_norm\n")
 	norm := 1.0/50.0*2.0*math.Pow(0.5,2.0)/math.Pow(256.0,2.0)
-	norm *= 1.0/(math.Pow((float64)(env.FFTSize),2.0))
+	norm *= 1.0/(float64)(env.FFTSize)
 	for res := 0; res < len(results); res++ {
 		for bin := 0; bin < env.FFTSize/2; bin++ {
 			fmt.Fprintf(ps_out,
