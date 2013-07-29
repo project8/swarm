@@ -287,6 +287,8 @@ func main() {
 		return
 	}
 	defer fit_out.Close()
+
+	fmt.Fprintf(fit_out, "bin, freq, icept, slope, temp, sum_squares")
 	for bin := 0; bin < env.FFTSize/2; bin++ {
 		t0, p0 := results[0].PhysTemp, results[0].PowerStats[bin].Mean()
 		f_nyq := results[0].NyquistFreq
@@ -303,7 +305,7 @@ func main() {
 			γ := f.Y0/f.Slope
 			freq := (float64)(bin)/(float64)(env.FFTSize)*f_nyq
 			fmt.Fprintf(fit_out,
-				"%d, %f, %f, %f, %f, %f, %f\n",
+				"%d, %f, %f, %f, %f, %f\n",
 				bin,
 				freq,
 				f.Y0,
@@ -322,14 +324,17 @@ func main() {
 		log.Print("[ERR] Couldn't open PS file for writing!")
 	}
 	defer ps_out.Close()
+
+	fmt.Fprintf(ps_out, "result, fft_bin, power, power_norm\n")
 	norm := 1.0/50.0*2.0*math.Pow(0.5,2.0)/math.Pow(256.0,2.0)
 	norm *= 1.0/(math.Pow((float64)(env.FFTSize),2.0))
 	for res := 0; res < len(results); res++ {
 		for bin := 0; bin < env.FFTSize/2; bin++ {
 			fmt.Fprintf(ps_out,
-				"%d, %d, %f\n",
+				"%d, %d, %f, %f\n",
 				res,
 				bin,
+				results[res].PowerStats[bin].Mean(),
 				norm*results[res].PowerStats[bin].Mean())
 		}
 	}
