@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"os"
 	"github.com/project8/swarm/gomonarch"
 	"github.com/project8/swarm/gomonarch/frame"
 	"github.com/project8/swarm/runningstat"
@@ -33,7 +34,8 @@ type Config struct {
 	NAvg       int   `json:"num_averages"`
 	NWorkers   int   `json:"num_workers"`
 	DataLocation string `json:"local_data_dir"`
-	FreqBin float64 `json:"freq"`
+	PSOutFile string `json:"power_spectrum_out_filename"`
+	FitOutFile string `json:"fit_out_filename"`
 	FFTWPlan *fftw.Plan
 }
 
@@ -277,7 +279,14 @@ func main() {
 
 	// Loop over bins, at each bin use all physical temps,
 	// plus the mean power in the bin at each temp for the
-	// X,Y pairs.  Then linear fit.
+	// X,Y pairs.  Then linear fit.  Write results to the fit
+	// output file.
+	fit_out, fit_f_err := os.Create(env.FitOutFile)
+	if fit_f_err != nil {
+		log.Print("[ERR] couldn't open fit file for writing!")
+		return
+	}
+	defer fit_out.Close()
 	for bin := 0; bin < env.FFTSize/2; bin++ {
 		t0, p0 := results[0].PhysTemp, results[0].PowerStats[bin].Mean()
 		f_nyq := results[0].NyquistFreq
@@ -293,7 +302,8 @@ func main() {
 		} else {
 			γ := f.Y0/f.Slope
 			freq := (float64)(bin)/(float64)(env.FFTSize)*f_nyq
-			fmt.Printf("%d, %f, %f, %f, %f, %f, %f\n",
+			fmt.Fprintf(fit_out,
+				"%d, %f, %f, %f, %f, %f, %f\n",
 				bin,
 				freq,
 				f.Y0,
@@ -306,11 +316,18 @@ func main() {
 	// Now we dump the raw power spectra, calibrated with the power in 
 	// Watts.  This is a loop over the results, as each one has its own
 	// power spectrum.  A gain calculation could go here too.
+
+	ps_out, ps_out_err := os.Create(env.PSOutFile)
+	if ps_out_err != nil {
+		log.Print("[ERR] Couldn't open PS file for writing!")
+	}
+	defer ps_out.Close()
 	norm := 1.0/50.0*2.0*math.Pow(0.5,2.0)/math.Pow(256.0,2.0)
 	norm *= 1.0/(math.Pow((float64)(env.FFTSize),2.0))
 	for res := 0; res < len(results); res++ {
 		for bin := 0; bin < env.FFTSize/2; bin++ {
-			fmt.Printf("%d, %d, %f\n",
+			fmt.Fprintf(ps_out,
+				"%d, %d, %f\n",
 				res,
 				bin,
 				norm*results[res].PowerStats[bin].Mean())
