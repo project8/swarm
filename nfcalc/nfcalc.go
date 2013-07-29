@@ -23,6 +23,7 @@ import (
 const (
 	FileNameStr      string       = `*output file name: `
 	NumCodes int = 1 << 8
+	kB float64 = 1.3806488e-23
 )
 
 type Config struct {
@@ -277,6 +278,10 @@ func main() {
 	t := make([]float64, len(results), len(results))
 	p := make([]float64, len(results), len(results))
 
+	// Power spectrum normalization
+	norm := 1.0/50.0*2.0*math.Pow(0.5,2.0)/math.Pow(256.0,2.0)
+	norm *= 1.0/(float64)(env.FFTSize)
+
 	// Loop over bins, at each bin use all physical temps,
 	// plus the mean power in the bin at each temp for the
 	// X,Y pairs.  Then linear fit.  Write results to the fit
@@ -288,7 +293,7 @@ func main() {
 	}
 	defer fit_out.Close()
 
-	fmt.Fprintf(fit_out, "bin, freq, icept, slope, temp, sum_squares\n")
+	fmt.Fprintf(fit_out, "bin, freq, icept, slope, temp, sum_squares, gain\n")
 	for bin := 0; bin < env.FFTSize/2; bin++ {
 		t0, p0 := results[0].PhysTemp, results[0].PowerStats[bin].Mean()
 		f_nyq := results[0].NyquistFreq
@@ -303,15 +308,27 @@ func main() {
 			log.Print("[ERR] fit failed, skipping.")
 		} else {
 			γ := f.Y0/f.Slope
+			n_t := γ*t0
 			freq := (float64)(bin)/(float64)(env.FFTSize)*f_nyq
+
+			// We can calculate gain now here.
+			// We know P = G*k*B*(T0 + Ta).
+			// We found Ta above, T0 is just the physical
+			// temperature.
+			// So P/(kBT) = G.
+			pow := res.PowerStats[bin].Mean()*norm
+			bw := f_nyq/(float64)(env.FFTSize)
+			g := pow/(kB*(n_t + res.PhysTemp)*bw)
+
 			fmt.Fprintf(fit_out,
-				"%d, %e, %e, %e, %e, %e\n",
+				"%d, %e, %e, %e, %e, %e, %e\n",
 				bin,
 				freq,
 				f.Y0,
 				f.Slope,
-				γ*t0,
-				f.SumSq)
+				n_t,
+				f.SumSq,
+				g)
 		}
 	}
 
@@ -326,8 +343,6 @@ func main() {
 	defer ps_out.Close()
 
 	fmt.Fprintf(ps_out, "result, fft_bin, power, power_norm\n")
-	norm := 2.0/50.0
-	norm *= 1.0/(float64)(env.FFTSize)
 	for res := 0; res < len(results); res++ {
 		for bin := 0; bin < env.FFTSize/2; bin++ {
 			fmt.Fprintf(ps_out,
