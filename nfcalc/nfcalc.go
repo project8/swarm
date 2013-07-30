@@ -300,6 +300,7 @@ func main() {
 		return
 	}
 	defer raw_out.Close()
+	fmt.Fprintf(raw_out, "bin, freq, phys_temp, power, norm_t, norm_p\n")
 
 	n_t := make([]float64, env.FFTSize, env.FFTSize)
 	fmt.Fprintf(fit_out, "bin, freq, icept, slope, temp, sum_squares\n")
@@ -311,6 +312,14 @@ func main() {
 		for pos, res := range results {
 			t[pos] = res.PhysTemp/t0
 			p[pos] = res.PowerStats[bin].Mean()/p0
+			fmt.Fprintf(raw_out,
+				"%d, %e, %e, %e, %e, %e",
+				bin,
+				freq,
+				res.PhysTemp,
+				res.PowerStats[bin].Mean(),
+				t[pos],
+				p[pos])
 		}
 
 		f, fit_err := fit.FitLinear(&t,&p,1,1)
