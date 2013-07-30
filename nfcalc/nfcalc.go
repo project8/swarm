@@ -202,6 +202,36 @@ func Bartlett(m *gomonarch.Monarch, c *Config) (s []runningstat.StatRunner, e er
 	return s, nil
 }
 
+func est_frac_err(f *fit.LinearFit, x, y []float64) (err float64) {
+	sse := 0.0
+	for p, v := range y {
+		sse += math.Pow((f.Y0 + x[p]*f.Slope) - v,2.0)
+	}
+	// mean squared error for 2 parameter linear fit
+	mse := sse/(float64)(len(x) - 2)
+
+	// now spread in x parameter
+	x_bar := 0.0
+	for _, v := range x {
+		x_bar += v
+	}
+	x_bar /= float64(len(x))
+
+	x_s := 0.0
+	for _, v := range x {
+		x_s += math.Pow((v - x_bar),2.0)
+	}
+
+	i_contrib := 1/math.Pow(f.Y0,2.0)
+	i_contrib *= (1/(float64)(len(x)) + math.Pow(x_bar,2.0)/x_s)
+
+	m_contrib := 1/math.Pow(f.Slope,2.0)
+	m_contrib *= 1/x_s
+
+	err = math.Sqrt(mse*(i_contrib + m_contrib))
+	return
+}
+
 /*
 Grab the results of the by_run_tag view with the key set to the run tag
 of interest.  Parse out the filenames, and grab the temperature data from
@@ -326,17 +356,21 @@ func main() {
 		if fit_err != nil {
 			log.Print("[ERR] fit failed, skipping.")
 		} else {
+
+			frac_err := est_frac_err(f, t, p)
 			γ := f.Y0/f.Slope
 			n_t[bin] = γ*t0
+			
 
 			fmt.Fprintf(fit_out,
-				"%d, %e, %e, %e, %e, %e\n",
+				"%d, %e, %e, %e, %e, %e, %e\n",
 				bin,
 				freq,
 				f.Y0,
 				f.Slope,
-				n_t,
-				f.SumSq)
+				n_t[bin],
+				f.SumSq,
+				frac_err*n_t[bin])
 		}
 	}
 
