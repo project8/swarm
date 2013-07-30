@@ -313,7 +313,7 @@ func main() {
 			t[pos] = res.PhysTemp/t0
 			p[pos] = res.PowerStats[bin].Mean()/p0
 			fmt.Fprintf(raw_out,
-				"%d, %e, %e, %e, %e, %e",
+				"%d, %e, %e, %e, %e, %e\n",
 				bin,
 				freq,
 				res.PhysTemp,
