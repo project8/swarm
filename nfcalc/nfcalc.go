@@ -333,7 +333,7 @@ func main() {
 	fmt.Fprintf(raw_out, "bin, freq, phys_temp, power, norm_t, norm_p\n")
 
 	n_t := make([]float64, env.FFTSize, env.FFTSize)
-	fmt.Fprintf(fit_out, "bin, freq, icept, slope, temp, sum_squares\n")
+	fmt.Fprintf(fit_out, "bin, freq, icept, slope, temp, sum_squares, temp_err\n")
 	for bin := 0; bin < env.FFTSize/2; bin++ {
 		t0, p0 := results[0].PhysTemp, results[0].PowerStats[bin].Mean()
 		f_nyq := results[0].NyquistFreq
