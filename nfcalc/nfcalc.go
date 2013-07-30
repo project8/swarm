@@ -37,6 +37,7 @@ type Config struct {
 	DataLocation string `json:"local_data_dir"`
 	PSOutFile string `json:"power_spectrum_out_filename"`
 	FitOutFile string `json:"fit_out_filename"`
+	RawOutFile string `json:"raw_out_filename"`
 	FFTWPlan *fftw.Plan
 }
 
@@ -285,7 +286,7 @@ func main() {
 	// Loop over bins, at each bin use all physical temps,
 	// plus the mean power in the bin at each temp for the
 	// X,Y pairs.  Then linear fit.  Write results to the fit
-	// output file.
+	// output file, and raw data to the raw output file.
 	fit_out, fit_f_err := os.Create(env.FitOutFile)
 	if fit_f_err != nil {
 		log.Print("[ERR] couldn't open fit file for writing!")
@@ -293,11 +294,19 @@ func main() {
 	}
 	defer fit_out.Close()
 
+	raw_out, raw_f_err := os.Create(env.RawOutFile)
+	if raw_f_err != nil {
+		log.Print("[ERR] couldn't open raw data file for writing!")
+		return
+	}
+	defer raw_out.Close()
+
 	n_t := make([]float64, env.FFTSize, env.FFTSize)
 	fmt.Fprintf(fit_out, "bin, freq, icept, slope, temp, sum_squares\n")
 	for bin := 0; bin < env.FFTSize/2; bin++ {
 		t0, p0 := results[0].PhysTemp, results[0].PowerStats[bin].Mean()
 		f_nyq := results[0].NyquistFreq
+		freq := (float64)(bin)/(float64)(env.FFTSize)*f_nyq
 		
 		for pos, res := range results {
 			t[pos] = res.PhysTemp/t0
@@ -310,7 +319,6 @@ func main() {
 		} else {
 			γ := f.Y0/f.Slope
 			n_t[bin] = γ*t0
-			freq := (float64)(bin)/(float64)(env.FFTSize)*f_nyq
 
 			fmt.Fprintf(fit_out,
 				"%d, %e, %e, %e, %e, %e\n",
