@@ -4,6 +4,7 @@ import(
 	"flag"
 	"fmt"
 	"log"
+	"math"
 	"math/cmplx"
 	"github.com/project8/swarm/gomonarch"
 	"github.com/project8/swarm/runningstat"
@@ -62,8 +63,12 @@ func main() {
 			stats[pos].Update(cmplx.Abs(val))
 		}
 	}
+	norm := 1.0/50.0*2.0*math.Pow(0.5,2.0)/math.Pow(256.0,2.0)
+	norm *= 1.0/(float64)(*FFTSize)
 
 	for pos, val := range stats {
-		fmt.Printf("%d, %f, %f\n", pos, val.Mean(), val.Variance())
+		fmt.Printf("%d, %e, %e\n", pos, 
+			norm*val.Mean(), 
+			norm*val.Variance())
 	}
 }
