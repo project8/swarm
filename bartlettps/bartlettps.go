@@ -15,8 +15,8 @@ import(
 
 func main() {
 	var infname = flag.String("infile", "", "absolute path of input file")
-	var FFTSize = flag.Int("fft_size", 1024, "length of FFT to calculate")
-	var NFFTs = flag.Int("num_ffts", 100, "number of FFTs to calculate")
+	var FFTSize = flag.Uint64("fft_size", 1024, "size of FFT to calculate")
+	var NFFTs = flag.Uint64("num_ffts", 100, "number of FFTs to calculate")
 	flag.Parse()
 
 	if *infname == "" {
@@ -29,7 +29,7 @@ func main() {
 		log.Print("Error opening file for reading!")
 		return
 	}
-	fr, fr_err := frame.NewFramer(m, 1024)
+	fr, fr_err := frame.NewFramer(m, *FFTSize)
 	if fr_err != nil {
 		log.Print(fr_err.Error())
 		return
@@ -43,11 +43,12 @@ func main() {
 	}
 
 	// prepare the arrays, the plan, and the px1500 calibration thingie
-	in := fftw.Alloc1d(*FFTSize)
-	out := fftw.Alloc1d(*FFTSize)
+	in := fftw.Alloc1d((int)(*FFTSize))
+	out := fftw.Alloc1d((int)(*FFTSize))
 	plan := fftw.PlanDft1d(in, out, fftw.Forward, fftw.Estimate)
 	p := px1500.PX1500{}
-	for i := 0; i < *NFFTs; i++ {
+	var i uint64 = 0
+	for i = 0; i < *NFFTs; i++ {
 		f, ok := fr.Advance()
 		if ok != nil {
 			log.Print("[WARN] Out of data too early...")
