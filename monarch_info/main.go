@@ -18,17 +18,20 @@ func main() {
 		log.Fatal("could not open file for reading:")
 		log.Fatal(m_open_err)
 	}
-	defer gomonarch.Close(m)
+	defer m.Close()
 	
 
-	nc := gomonarch.NumChannels(m)
-	rl := gomonarch.RecordLength(m)
+	nc := m.NumChannels()
+	rl := m.RecordLength()
 	fmt.Printf("info for file named <%s>\n",*fname)
 	fmt.Printf("\tnumber of channels: %d\n",nc)
 	fmt.Printf("\trecord length in bytes: %d\n",rl)
-	nr := 0
+	var nr uint64 = 0
 	var err error
-	for _, err = gomonarch.NextRecord(m); err == nil; _, err = gomonarch.NextRecord(m) {
+	for r, err := m.NextRecord(); err == nil; r, err = m.NextRecord() {
+		if r.RecId != nr {
+			log.Print("[WARN] Out of order record: %d.\n",r.RecId)
+		}
 		nr += 1
 	}
 	if err != io.EOF {
