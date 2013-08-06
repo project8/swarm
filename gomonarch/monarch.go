@@ -2,7 +2,6 @@ package gomonarch
 
 import (
 	"os"
-	"bytes"
 	"syscall"
 	"encoding/binary"
 	"code.google.com/p/goprotobuf/proto"
@@ -82,28 +81,18 @@ func (m *Monarch) NextRecord() (r *record.MonarchRecord, e error) {
 }
 
 func unmarshal_record(f *os.File, r *record.MonarchRecord) error {
-	ar := make([]byte, 8,8)
-	buf := bytes.NewBuffer(ar)
-	_, acq_err := f.Read(ar)
-	acq_id, _ := binary.ReadUvarint(buf)
+	acq_err := binary.Read(f, binary.LittleEndian, &(r.AcqId))
 	if acq_err != nil {
 		return acq_err
 	}
-	_, rec_err := f.Read(ar)
-	rec_id, _ := binary.ReadUvarint(buf)
+	rec_err := binary.Read(f, binary.LittleEndian, &(r.RecId))
 	if rec_err != nil {
 		return rec_err
 	}
-	_, clock_err := f.Read(ar)
-	clock, _ := binary.ReadUvarint(buf)
+	clock_err := binary.Read(f, binary.LittleEndian, &(r.Clock))
 	if clock_err != nil {
 		return clock_err
 	}
 	_, data_err := f.Read(r.Data)
-	if data_err == nil {
-		r.AcqId = acq_id
-		r.RecId = rec_id
-		r.Clock = clock
-	}
 	return data_err
 }
