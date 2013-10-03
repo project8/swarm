@@ -8,13 +8,11 @@ import (
 	"github.com/project8/swarm/gomonarch"
 	"github.com/project8/swarm/gomonarch/frame"
 	"github.com/project8/swarm/runningstat"
-	"github.com/project8/swarm/sensors/cernox"
 	"github.com/project8/swarm/sensors/px1500"
 	"github.com/kofron/go-fftw"
 	"github.com/kofron/gogsl/fit"
 	"io/ioutil"
 	"net/http"
-	"strings"
 	"math"
 	"math/cmplx"
 	"log"
@@ -52,9 +50,14 @@ type ViewResult struct {
 	Docs []ViewDoc `json:"rows"`
 }
 
+type DripRunCommand struct {
+     OutputName string `json:"output"`
+}
+
 type MantisDoc struct {
 	TimeStamp string `json:"timestamp"`
 	Result    string `json:"result"`
+	Command	  DripRunCommand `json:"command"`
 	Filename  string
 }
 
@@ -119,25 +122,17 @@ func d2a(input []byte, output []complex128) {
 }
 
 func parseMantisResult(result *MantisDoc) (*MantisDoc, error) {
-	n := strings.Index(result.Result, FileNameStr)
-	if n > 0 {
-		substr := result.Result[(n + len(FileNameStr)):len(result.Result)]
-		m := strings.Index(substr, "\n")
-		if m > 0 {
-			result.Filename = substr[0:m]
-		}
-	}
+     result.Filename = result.Command.OutputName       
 	return result, nil
 }
 
 func ProcessRuns(docs []ViewDoc, c *Config, result chan<- []Calculation) {
 	var calc Calculation
 	results := make([]Calculation, 0, len(docs))
-	termCal := cernox.Cernox{CalPts: cernox.Cernox87821}
 	for _, doc := range docs {
 		var term_temp, amp_temp float64
 		mr, _ := parseMantisResult(&doc.Value.MantisResult)
-		fmt.Sscanf(doc.Value.TerminatorTemp.RawValue, "%g OHM", &term_temp)
+		fmt.Sscanf(doc.Value.TerminatorTemp.FinalValue, "%g K", &term_temp)
 		fmt.Sscanf(doc.Value.KH2Temp.FinalValue, "%g K", &amp_temp)
 		
 		// try to open the file.
@@ -146,7 +141,6 @@ func ProcessRuns(docs []ViewDoc, c *Config, result chan<- []Calculation) {
 			log.Printf("[ERR] couldn't open %s, skipping.", mr.Filename)
 		} else {
 			f_nyq := m.AcqRate()/2.0
-			term_temp = termCal.Calibrate(term_temp)
 			if math.IsInf(term_temp,0) {
 				log.Printf("[ERR] bad terminator temp, skipping.")
 			} else {
@@ -232,8 +226,8 @@ func main() {
 		err = json.Unmarshal(bytes, env)
 	}
 
-	fs := "http://%s:%d/%s/_design/%s/_view/by_run_tag?%s"
-	url := fmt.Sprintf(fs,env.DBHost,env.DBPort,env.DBName,"general","key=\"noise_temperature_tone\"")
+	fs := "http://%s:%d/%s/_design/%s/_view/by_run_tag?key=\"%s\""
+	url := fmt.Sprintf(fs,env.DBHost,env.DBPort,env.DBName,"general",env.RunTag)
 	r, get_err := http.Get(url)
 	if get_err != nil {
 		panic("couldn't fetch run data!")
@@ -335,7 +329,7 @@ func main() {
 				freq,
 				f.Y0,
 				f.Slope,
-				n_t,
+				n_t[bin],
 				f.SumSq)
 		}
 	}
