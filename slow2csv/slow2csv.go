@@ -51,12 +51,12 @@ func main() {
 
 	// TODO this should be current time - 2 hrs
 	var from = flag.String("from",
-		"2013-10-09%2017:18:42",
+		"2013-10-09T17:18:42Z",
 		"start time of data you want")
 
 	// TODO this should be now
 	var to = flag.String("to",
-		"2013-10-09%2017:28:42",
+		"2013-10-09T17:28:42Z",
 		"stop time of data you want")
 
 	var channel = flag.String("channel",
@@ -67,13 +67,26 @@ func main() {
 
 	flag.Parse()
 
+	// parse time strings to Time types
+	t0, t0_err := time.Parse(time.RFC3339,*from)
+	if t0_err != nil {
+		fmt.Println("ERR: from time must be specified in RFC3339 format.")
+		return
+	} 
+
+	t1, t1_err := time.Parse(time.RFC3339, *to)
+	if t1_err != nil {
+		fmt.Println("ERR: to time must be specified in RFC3339 format.")
+		return
+	}
+
 	host := dripdb.DripDBHost{Host: *dbhost, Port: *dbport}
 	db := dripdb.DripDB{Host: host, Name: *dbname}
 	view := dripdb.View{DB: db,
 		Design: "log_access",
 		Name:   "all_logged_data"}
 
-	keys := dripdb.KeyRange{Start: *from, End: *to}
+	keys := dripdb.KeyRange{Start: t0, End: t1}
 
 	var v dripdb.LogViewResult
 
