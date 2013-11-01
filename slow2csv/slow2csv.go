@@ -8,8 +8,8 @@ import (
 	"flag"
 	"fmt"
 	"github.com/project8/swarm/dripdb"
-	"strings"
 	"time"
+	"strings"
 )
 
 const (
