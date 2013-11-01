@@ -6,13 +6,12 @@ import (
 	"io/ioutil"
 	"net/http"
 	"time"
-	"strings"
 )
 
 const (
 	ViewFmtString   = "%s/_design/%s/_view/%s"
 	RangedFmtString = "%s?startkey=\"%s\"&endkey=\"%s\""
-	DripTimeFmt = "2006-01-02 15:04:05"
+	DripTimeFmt = time.RFC3339
 )
 
 type View struct {
@@ -47,7 +46,6 @@ func (v *View) URL() string {
 
 func toDripFormat(t time.Time)  (s string) {
 	s = t.Format(DripTimeFmt)
-	s = strings.Replace(s, " ", "%20", -1)
 	return
 }
 
@@ -58,6 +56,7 @@ func (v *View) GetDataForRange(r KeyRange, res Viewer) (e error) {
 	endString := toDripFormat(r.End)
 
 	url := fmt.Sprintf(RangedFmtString, base, startString, endString)
+	fmt.Println(url)
 
 	http_res, e := http.Get(url)
 	if e != nil {
