@@ -51,12 +51,12 @@ func main() {
 
 	// TODO this should be current time - 2 hrs
 	var from = flag.String("from",
-		"2013-10-09T17:18:42Z",
+		time.Now().UTC().Add(-2.0*time.Hour).Format(dripdb.TimeFormat),
 		"start time of data you want")
 
 	// TODO this should be now
 	var to = flag.String("to",
-		"2013-10-09T17:28:42Z",
+		time.Now().UTC().Format(dripdb.TimeFormat),
 		"stop time of data you want")
 
 	var channel = flag.String("channel",
