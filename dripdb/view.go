@@ -56,7 +56,6 @@ func (v *View) GetDataForRange(r KeyRange, res Viewer) (e error) {
 	endString := toDripFormat(r.End)
 
 	url := fmt.Sprintf(RangedFmtString, base, startString, endString)
-	fmt.Println(url)
 
 	http_res, e := http.Get(url)
 	if e != nil {
