@@ -1,0 +1,12 @@
+{
+	"username": "nsoblath",
+
+	"channels":
+	{
+		"random":
+		{
+			"size-limit": 5,
+			"monitor-size": true
+		}
+	}
+}
