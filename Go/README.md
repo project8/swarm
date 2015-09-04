@@ -8,9 +8,9 @@
 
 ### Packages
 
-* **Authentication** -- Interface for the Project 8 authentications scheme
-* **Logging** -- Standardized terminal logging
-* **Utility** -- A collection of useful tools
+* **authentication** -- Interface for the Project 8 authentications scheme
+* **logging** -- Standardized terminal logging
+* **utility** -- A collection of useful tools
 
 ## Installation
 
