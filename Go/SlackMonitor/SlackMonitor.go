@@ -263,7 +263,7 @@ func cleanHistory(channelID string, api *slack.Client, msgQueue *utility.Queue, 
 			//logging.Log.Debug("(%s) Deleting: %s", channelID, message.Timestamp)
 			_, _, /*respChan, respTS,*/ respErr := api.DeleteMessage(channelID, message.Timestamp)
 			if respErr != nil {
-				logging.Log.Warning("(%s) Unable to delete message: %v", respErr)
+				logging.Log.Warning("(%s) Unable to delete message: %v", channelID, respErr)
 			}
 			//logging.Log.Debug("(%s) Deletion response: %s, %s, %v", channelID, respChan, respTS, respErr)
 			nDeleted++
