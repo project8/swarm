@@ -4,8 +4,9 @@ import (
 	"flag"
 	"os"
 	"os/user"
+	"reflect"
 	"strings"
-	"sync"
+	//"sync"
 
 	"github.com/kardianos/osext"
 	"github.com/spf13/viper"
@@ -14,7 +15,7 @@ import (
 
 	"github.com/project8/swarm/Go/authentication"
 	"github.com/project8/swarm/Go/logging"
-	"github.com/project8/swarm/Go/utility"
+	//"github.com/project8/swarm/Go/utility"
 )
 
 var MasterSenderInfo dripline.SenderInfo
@@ -82,8 +83,8 @@ func main() {
 	logging.ConfigureLogging(viper.GetString("log-level"))
 	logging.Log.Info("Log level: %v", viper.GetString("log-level"))
 
-	broker = viper.GetString("broker")
-	queueName = viper.GetString("queue")
+	broker := viper.GetString("broker")
+	queueName := viper.GetString("queue")
 
 	// check authentication for desired username
 	if authErr := authentication.Load(); authErr != nil {
@@ -92,11 +93,11 @@ func main() {
 	}
 
 	if ! authentication.AmqpAvailable() {
-		logging.Log.Critical("Authentication for AMQP is not available", userName)
+		logging.Log.Critical("Authentication for AMQP is not available")
 		os.Exit(1)
 	}
 
-	amqpUser := authentication.AmqpUser()
+	amqpUser := authentication.AmqpUsername()
 	amqpPassword := authentication.AmqpPassword()
 
 	url := "amqp://" + amqpUser + ":" + amqpPassword + "@" + broker
@@ -121,6 +122,12 @@ func main() {
 
 
 
+	//context := build.defaultContext()
+
+	//os.Exit(2)
+
+
+
 receiverLoop:
 	for {
 		select {
@@ -132,17 +139,37 @@ receiverLoop:
 			
 			logging.Log.Debug("Received request")
 			switch request.MsgOp {
-			case MOCommand:
+			case dripline.MOCommand:
 				var instruction string
 				if request.Message.Target != queueName {
 					instruction = strings.TrimPrefix(request.Message.Target, queueName + ".")
 				}
 				logging.Log.Debug("Command instruction: %s", instruction)
 				switch instruction {
-				case "write_metadata":
+				//case "write_metadata":
+				case "":
 					logging.Log.Debug("Received \"write_metadata\" instruction")
+					logging.Log.Warning("type: %v", reflect.TypeOf(request.Message.Payload))
+					logging.Log.Warning("try printing the payload? \n%v", request.Message.Payload)
+					payloadAsMap, okPAM := request.Message.Payload.(map[interface{}]interface{})
+					if ! okPAM {
+						logging.Log.Warning("Unable to convert payload to map; aborting message")
+						continue receiverLoop
+					}
+					logging.Log.Warning("chips? %v", payloadAsMap["chips"])
+					filenameIfc, hasFN := payloadAsMap["filename"]
+					if ! hasFN {
+						logging.Log.Warning("No filename present in message; aborting")
+						continue receiverLoop
+					}
+					filename, okFN := filenameIfc.(string)
+					if ! okFN {
+						logging.Log.Warning("Unable to convert filename to string; aborting message")
+						continue receiverLoop
+					}
+					logging.Log.Debug("Filename to write: %s", filename)
+
 					// TODO:
-					// extract filename from request.Payload[filename]
 					// extract path from ruest.Payload[path]
 					// check for [path] and create directories if needed
 					// convert request.Payload[metadata] to json
