@@ -162,14 +162,15 @@ receiverLoop:
 						logging.Log.Warning("No filename present in message; aborting")
 						continue receiverLoop
 					}
-					filename, okFN := filenameIfc.(string)
-					if ! okFN {
+					filename := dripline.ConvertToString(filenameIfc)
+					/*if ! okFN {
 						logging.Log.Warning("Unable to convert filename to string; aborting message")
 						continue receiverLoop
-					}
+					}*/
 					logging.Log.Debug("Filename to write: %s", filename)
 
 					// TODO:
+					// check that the filename is a valid filename
 					// extract path from ruest.Payload[path]
 					// check for [path] and create directories if needed
 					// convert request.Payload[metadata] to json
