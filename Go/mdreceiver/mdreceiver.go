@@ -6,6 +6,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	//"sync"
 	"unsafe"
@@ -156,31 +157,41 @@ receiverLoop:
 					logging.Log.Warning("try printing the payload? \n%v", request.Message.Payload)
 					payloadAsMap, okPAM := request.Message.Payload.(map[interface{}]interface{})
 					if ! okPAM {
-						logging.Log.Warning("Unable to convert payload to map; aborting message")
+						if sendErr := PrepareAndSendReply(service, request, dripline.RCErrDripPayload, "Unable to convert payload to map; aborting message", MasterSenderInfo); sendErr != nil {
+							break receiverLoop
+						}
 						continue receiverLoop
 					}
 					logging.Log.Warning("chips? %v", payloadAsMap["chips"])
 					filenameIfc, hasFN := payloadAsMap["filename"]
 					if ! hasFN {
-						logging.Log.Warning("No filename present in message; aborting")
+						if sendErr := PrepareAndSendReply(service, request, dripline.RCErrDripPayload, "No filename present in message; aborting", MasterSenderInfo); sendErr != nil {
+							break receiverLoop
+						}
 						continue receiverLoop
 					}
 					thePath, okFP := utility.TryConvertToString(filenameIfc)
 					if okFP != nil {
-						logging.Log.Warning("Unable to convert filename to string; aborting message")
+						if sendErr := PrepareAndSendReply(service, request, dripline.RCErrDripPayload, "Unable to convert filename to string; aborting message", MasterSenderInfo); sendErr != nil {
+							break receiverLoop
+						}
 						continue receiverLoop
 					}
 					logging.Log.Debug("Filename to write: %s", thePath)
 
 					dir, _ := filepath.Split(thePath)
 					if mkdirErr := os.MkdirAll(dir, os.ModeDir); mkdirErr != nil {
-						logging.Log.Warning("Unable to create directory; aborting")
+						if sendErr := PrepareAndSendReply(service, request, dripline.RCErrHW, "Unable to create directory; aborting", MasterSenderInfo); sendErr != nil {
+							break receiverLoop
+						}
 						continue receiverLoop
 					}
 
 					metadataIfc, hasMetadata := payloadAsMap["metadata"]
 					if ! hasMetadata {
-						logging.Log.Warning("No metadata present in message; aborting")
+						if sendErr := PrepareAndSendReply(service, request, dripline.RCErrDripPayload, "No metadata present in message; aborting", MasterSenderInfo); sendErr != nil {
+							break receiverLoop
+						}
 						continue receiverLoop
 					}
 
@@ -189,43 +200,65 @@ receiverLoop:
 					encoder := codec.NewEncoderBytes(&(encoded), handle)
 					jsonErr := encoder.Encode(metadataIfc)
 					if jsonErr != nil {
-						logging.Log.Warning("Unable to convert metadata to JSON")
+						if sendErr := PrepareAndSendReply(service, request, dripline.RCErrDripPayload, "Unable to convert metadata to JSON", MasterSenderInfo); sendErr != nil {
+							break receiverLoop
+						}
 						continue receiverLoop
 					}
 
 					theFile, fileErr := os.Create(thePath)
 					if fileErr != nil {
-						logging.Log.Warning("Unable to create file for the metadata")
+						if sendErr := PrepareAndSendReply(service, request, dripline.RCErrHW, "Unable to create file for the metadata", MasterSenderInfo); sendErr != nil {
+							break receiverLoop
+						}
 						continue receiverLoop
 					}
 
 					_, writeErr := theFile.Write(encoded)
 					if writeErr != nil {
-						logging.Log.Warning("Unable to write metadata to file")
+						if sendErr := PrepareAndSendReply(service, request, dripline.RCErrHW, "Unable to write metadata to file", MasterSenderInfo); sendErr != nil {
+							break receiverLoop
+						}
 						continue receiverLoop
 					}
 
 					closeErr := theFile.Close()
 					if closeErr != nil {
-						logging.Log.Warning("Unable to close the metadata file")
+						if sendErr := PrepareAndSendReply(service, request, dripline.RCErrHW, "Unable to close the metadata file", MasterSenderInfo); sendErr != nil {
+							break receiverLoop
+						}
 						continue receiverLoop
 					}
 
-					reply := dripline.PrepareReplyToRequest(request, dripline.RCSuccess, "Metadata file written", MasterSenderInfo)
-					if sendErr := service.SendReply(reply); sendErr != nil {
-						logging.Log.Error("Could not send the reply: %v", sendErr)
+					if sendErr := PrepareAndSendReply(service, request, dripline.RCSuccess, "Metadata file written", MasterSenderInfo); sendErr != nil {
 						break receiverLoop
 					}
 
 				default:
-					logging.Log.Warning("Incoming request operation instruction not handled: %s", instruction)
-					// TODO: send reply with error code
+					message := "Incoming request operation instruction not handled: " + instruction
+					if sendErr := PrepareAndSendReply(service, request, dripline.RCErrDripMethod, message, MasterSenderInfo); sendErr != nil {
+						break receiverLoop
+					}
+					continue receiverLoop
 				}
 			default:
-				logging.Log.Warning("Incoming request operation type not handled: %v", request.MsgOp)
+				message := "Incoming request operation type not handled: " + strconv.FormatUint(uint64(request.MsgOp), 10)
+				if sendErr := PrepareAndSendReply(service, request, dripline.RCErrDripMethod, message, MasterSenderInfo); sendErr != nil {
+					break receiverLoop
+				}
+				continue receiverLoop
 			}
 		}
 	}
 
 	logging.Log.Info("MdReceiver is finished")
 }
+
+func PrepareAndSendReply(service *dripline.AmqpService, request dripline.Request, retCode dripline.MsgCodeT, returnMessage string, senderInfo dripline.SenderInfo) (e error) {
+	e = nil
+	reply := dripline.PrepareReplyToRequest(request, retCode, returnMessage, senderInfo)
+	e = service.SendReply(reply);
+	logging.Log.Error("Could not send the reply: %v", e)
+	return
+}
+
