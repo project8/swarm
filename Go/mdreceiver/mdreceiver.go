@@ -4,18 +4,21 @@ import (
 	"flag"
 	"os"
 	"os/user"
+	"path/filepath"
 	"reflect"
 	"strings"
 	//"sync"
+	"unsafe"
 
 	"github.com/kardianos/osext"
 	"github.com/spf13/viper"
+	"github.com/ugorji/go/codec"
 
 	"github.com/project8/dripline/go/dripline"
 
 	"github.com/project8/swarm/Go/authentication"
 	"github.com/project8/swarm/Go/logging"
-	//"github.com/project8/swarm/Go/utility"
+	"github.com/project8/swarm/Go/utility"
 )
 
 var MasterSenderInfo dripline.SenderInfo
@@ -162,19 +165,51 @@ receiverLoop:
 						logging.Log.Warning("No filename present in message; aborting")
 						continue receiverLoop
 					}
-					filename := dripline.ConvertToString(filenameIfc)
-					/*if ! okFN {
+					thePath, okFP := utility.TryConvertToString(filenameIfc)
+					if okFP != nil {
 						logging.Log.Warning("Unable to convert filename to string; aborting message")
 						continue receiverLoop
-					}*/
-					logging.Log.Debug("Filename to write: %s", filename)
+					}
+					logging.Log.Debug("Filename to write: %s", thePath)
 
-					// TODO:
-					// check that the filename is a valid filename
-					// extract path from ruest.Payload[path]
-					// check for [path] and create directories if needed
-					// convert request.Payload[metadata] to json
-					// write json to file [path]/[filename]
+					dir, _ := filepath.Split(thePath)
+					if mkdirErr := os.MkdirAll(dir, os.ModeDir); mkdirErr != nil {
+						logging.Log.Warning("Unable to create directory; aborting")
+						continue receiverLoop
+					}
+
+					metadataIfc, hasMetadata := payloadAsMap["metadata"]
+					if ! hasMetadata {
+						logging.Log.Warning("No metadata present in message; aborting")
+						continue receiverLoop
+					}
+
+					encoded := make([]byte, 0, unsafe.Sizeof(metadataIfc))
+					handle := new(codec.JsonHandle)
+					encoder := codec.NewEncoderBytes(&(encoded), handle)
+					jsonErr := encoder.Encode(metadataIfc)
+					if jsonErr != nil {
+						logging.Log.Warning("Unable to convert metadata to JSON")
+						continue receiverLoop
+					}
+
+					theFile, fileErr := os.Create(thePath)
+					if fileErr != nil {
+						logging.Log.Warning("Unable to create file for the metadata")
+						continue receiverLoop
+					}
+
+					_, writeErr := theFile.Write(encoded)
+					if writeErr != nil {
+						logging.Log.Warning("Unable to write metadata to file")
+						continue receiverLoop
+					}
+
+					closeErr := theFile.Close()
+					if closeErr != nil {
+						logging.Log.Warning("Unable to close the metadata file")
+						continue receiverLoop
+					}
 
 					reply := dripline.PrepareReplyToRequest(request, dripline.RCSuccess, "Metadata file written", MasterSenderInfo)
 					if sendErr := service.SendReply(reply); sendErr != nil {
