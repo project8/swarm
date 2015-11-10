@@ -258,7 +258,9 @@ func PrepareAndSendReply(service *dripline.AmqpService, request dripline.Request
 	e = nil
 	reply := dripline.PrepareReplyToRequest(request, retCode, returnMessage, senderInfo)
 	e = service.SendReply(reply);
-	logging.Log.Error("Could not send the reply: %v", e)
+	if e != nil {
+		logging.Log.Error("Could not send the reply: %v", e)
+	}
 	return
 }
 
