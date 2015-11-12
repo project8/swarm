@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	//"sync"
+	"time"
 	"unsafe"
 
 	"github.com/kardianos/osext"
@@ -186,7 +187,8 @@ receiverLoop:
 						}
 						continue receiverLoop
 					}
-					time.Sleep(1 * time.Second)
+					// Add a small delay after creating the new directory so that anything (e.g. Hornet) waiting for that directory can react to it before the JSON file is created
+					time.Sleep(100 * time.Millisecond)
 
 					metadataIfc, hasMetadata := payloadAsMap["metadata"]
 					if ! hasMetadata {
