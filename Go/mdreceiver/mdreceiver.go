@@ -186,6 +186,7 @@ receiverLoop:
 						}
 						continue receiverLoop
 					}
+					time.Sleep(1 * time.Second)
 
 					metadataIfc, hasMetadata := payloadAsMap["metadata"]
 					if ! hasMetadata {
@@ -216,6 +217,7 @@ receiverLoop:
 
 					_, writeErr := theFile.Write(encoded)
 					if writeErr != nil {
+						theFile.Close()
 						if sendErr := PrepareAndSendReply(service, request, dripline.RCErrHW, "Unable to write metadata to file", MasterSenderInfo); sendErr != nil {
 							break receiverLoop
 						}
