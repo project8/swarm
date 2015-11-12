@@ -256,6 +256,11 @@ receiverLoop:
 
 func PrepareAndSendReply(service *dripline.AmqpService, request dripline.Request, retCode dripline.MsgCodeT, returnMessage string, senderInfo dripline.SenderInfo) (e error) {
 	e = nil
+	if retCode == dripline.RCSuccess {
+		logging.Log.Debug("Sending reply: (%v) %s", retCode, returnMessage)
+	} else {
+		logging.Log.Warn("Sending reply: (%v) %s", retCode, returnMessage)
+	}
 	reply := dripline.PrepareReplyToRequest(request, retCode, returnMessage, senderInfo)
 	e = service.SendReply(reply);
 	if e != nil {
