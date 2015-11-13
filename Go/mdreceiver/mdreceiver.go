@@ -182,7 +182,7 @@ receiverLoop:
 					logging.Log.Debug("Filename to write: %s", thePath)
 
 					dir, _ := filepath.Split(thePath)
-					if mkdirErr := os.MkdirAll(dir, os.ModeDir); mkdirErr != nil {
+					if mkdirErr := os.MkdirAll(dir, os.ModeDir | 0775); mkdirErr != nil {
 						if sendErr := PrepareAndSendReply(service, request, dripline.RCErrHW, "Unable to create directory; aborting", MasterSenderInfo); sendErr != nil {
 							break receiverLoop
 						}
