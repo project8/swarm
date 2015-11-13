@@ -1,0 +1,9 @@
+{
+	"log-level": "INFO",
+
+	"maximum-age": "2h",
+
+	"root-dir": "/my/data/dir",
+
+	"wait-interval": "30m"
+}
