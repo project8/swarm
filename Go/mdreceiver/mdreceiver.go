@@ -79,12 +79,14 @@ func main() {
 	viper.SetDefault("queue", "metadata")
 
 	// load config
-	viper.SetConfigFile(configFile)
-	if parseErr := viper.ReadInConfig(); parseErr != nil {
-		logging.Log.Critical("%v", parseErr)
-		os.Exit(1)
+	if configFile != "" {
+		viper.SetConfigFile(configFile)
+		if parseErr := viper.ReadInConfig(); parseErr != nil {
+			logging.Log.Critical("%v", parseErr)
+			os.Exit(1)
+		}
+		logging.Log.Notice("Config file loaded")
 	}
-	logging.Log.Notice("Config file loaded")
 	logging.ConfigureLogging(viper.GetString("log-level"))
 	logging.Log.Info("Log level: %v", viper.GetString("log-level"))
 
