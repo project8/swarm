@@ -156,8 +156,8 @@ receiverLoop:
 				//case "write_metadata":
 				case "":
 					logging.Log.Debug("Received \"write_metadata\" instruction")
-					logging.Log.Warning("type: %v", reflect.TypeOf(request.Message.Payload))
-					logging.Log.Warning("try printing the payload? \n%v", request.Message.Payload)
+					//logging.Log.Warning("type: %v", reflect.TypeOf(request.Message.Payload))
+					//logging.Log.Warning("try printing the payload? \n%v", request.Message.Payload)
 					payloadAsMap, okPAM := request.Message.Payload.(map[interface{}]interface{})
 					if ! okPAM {
 						if sendErr := PrepareAndSendReply(service, request, dripline.RCErrDripPayload, "Unable to convert payload to map; aborting message", MasterSenderInfo); sendErr != nil {
@@ -165,7 +165,6 @@ receiverLoop:
 						}
 						continue receiverLoop
 					}
-					logging.Log.Warning("chips? %v", payloadAsMap["chips"])
 					filenameIfc, hasFN := payloadAsMap["filename"]
 					if ! hasFN {
 						if sendErr := PrepareAndSendReply(service, request, dripline.RCErrDripPayload, "No filename present in message; aborting", MasterSenderInfo); sendErr != nil {
