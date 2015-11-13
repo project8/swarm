@@ -83,7 +83,6 @@ func main() {
 	// defult configuration
 	viper.SetDefault("log-level", "INFO")
 	viper.SetDefault("maximum-age", "1h")
-	viper.SetDefault("root-dir", "") // this will be invalid, so it must be manually configured
 	viper.SetDefault("wait-interval", "10m")
 
 	// load config
@@ -101,61 +100,67 @@ func main() {
 	maxAge := viper.GetDuration("maximum-age")
 	waitInterval := viper.GetDuration("wait-interval")
 
-	rootDir, rdErr := filepath.Abs(filepath.Clean(viper.GetString("root-dir")))
-	if rdErr != nil {
-		logging.Log.Critical("Unable to get absolute form of the root directory <%s>", viper.GetString("root-dir"))
-		os.Exit(1)
-	}
-	if rootDir == "" {
-		logging.Log.Critical("Root directory (\"root-dir\") was not specified in the config file")
+	rootDirs := viper.GetStringSlice("root-dirs")
+	if len(rootDirs) == 0 {
+		logging.Log.Critical("No root directories were provided")
 		os.Exit(1)
 	}
 
-	// Do a couple checks on the root directory
-	rootDirInfo, statErr := os.Stat(rootDir)
-	if statErr != nil {
-		logging.Log.Critical("Unable to \"Stat\" the root directory <%s>", rootDir)
-		os.Exit(1)
-	}
-	if ! rootDirInfo.IsDir() {
-		logging.Log.Critical("\"root-dir\" provided <%s> is not a directory", rootDir)
-		os.Exit(1)
+	// Clean up and check the root directories
+	for rdInd, rootDir := range rootDirs {
+		rootDirAbs, rdErr := filepath.Abs(filepath.Clean(rootDir))
+		if rdErr != nil {
+			logging.Log.Critical("Unable to get absolute form of the root directory <%s>", rootDir)
+			os.Exit(1)
+		}
+
+		// Do a couple checks on the root directory
+		rootDirInfo, statErr := os.Stat(rootDirAbs)
+		if statErr != nil {
+			logging.Log.Critical("Unable to \"Stat\" the root directory <%s>", rootDirAbs)
+			os.Exit(1)
+		}
+		if ! rootDirInfo.IsDir() {
+			logging.Log.Critical("Root directory <%s> is not a directory", rootDirAbs)
+			os.Exit(1)
+		}
+
+		rootDirs[rdInd] = rootDirAbs
 	}
 
-	if chdirErr := os.Chdir(rootDir); chdirErr != nil {
-		logging.Log.Critical("Unable to change to the root directory <%s>: %v", rootDir, chdirErr)
-		os.Exit(1)
-	}
 
 	logging.Log.Notice("Watching for stale directories.  Use ctrl-c to exit")
 
 //mainLoop:
 	for {
-		// Loop over the contents of rootDir
-		// We don't apply processDir() directly to rootDir because we don't want to delete rootDir if it's empty
-		logging.Log.Debug("Processing directory <%s>", rootDir)
-		dirContents, readDirErr := ioutil.ReadDir(rootDir)
-		if readDirErr != nil {
-			logging.Log.Critical("Unable to read directory <%s>", rootDir)
-			os.Exit(1)
-		}
+		// Loop over the contents of rootDirs
+		// We don't apply processDir() directly to the rootDirs because we don't want to delete rootDir if it's empty
+		for _, rootDir := range rootDirs {
+			logging.Log.Debug("Processing directory <%s>", rootDir)
 
-		exitOnErrors := false
+			dirContents, readDirErr := ioutil.ReadDir(rootDir)
+			if readDirErr != nil {
+				logging.Log.Critical("Unable to read directory <%s>", rootDir)
+				os.Exit(1)
+			}
 
-		for _, fileInfo := range dirContents {
-			logging.Log.Debug("Directory <%s> is not empty; processing contents", rootDir)
-			if fileInfo.IsDir() {
-				if procErr := processDir(fileInfo, rootDir, maxAge); procErr != nil {
-					logging.Log.Error("An error occurred while processing directory <%s>: %v", fileInfo.Name(), procErr)
-					exitOnErrors = true
-				}
-			} // else it's a file; ignore it
-		}
-		logging.Log.Debug("Finished processing <%s>", rootDir)
+			exitOnErrors := false
 
-		if exitOnErrors == true {
-			logging.Log.Critical("Exiting due to directory-processing errors")
-			break
+			for _, fileInfo := range dirContents {
+				logging.Log.Debug("Directory <%s> is not empty; processing contents", rootDir)
+				if fileInfo.IsDir() {
+					if procErr := processDir(fileInfo, rootDir, maxAge); procErr != nil {
+						logging.Log.Error("An error occurred while processing directory <%s>: %v", fileInfo.Name(), procErr)
+						exitOnErrors = true
+					}
+				} // else it's a file; ignore it
+			}
+			logging.Log.Debug("Finished processing <%s>", rootDir)
+
+			if exitOnErrors == true {
+				logging.Log.Critical("Exiting due to directory-processing errors")
+				break
+			}
 		}
 
 		// Wait the specified amount of time before running again

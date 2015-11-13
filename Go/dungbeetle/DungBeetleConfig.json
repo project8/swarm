@@ -3,7 +3,10 @@
 
 	"maximum-age": "2h",
 
-	"root-dir": "/my/data/dir",
+	"root-dirs": [
+	    "/my/data/hot-dir", 
+	    "/my/data/warm-dir"
+	],
 
 	"wait-interval": "30m"
 }
