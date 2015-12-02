@@ -25,7 +25,7 @@ import (
 
 var MasterSenderInfo dripline.SenderInfo
 func fillMasterSenderInfo() (e error) {
-	MasterSenderInfo.Package = "hornet"
+	MasterSenderInfo.Package = "mdreceiver"
 	MasterSenderInfo.Exe, e = osext.Executable()
 	if e != nil {
 		return
