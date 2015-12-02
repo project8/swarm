@@ -1,0 +1,7 @@
+{
+	"log-level": "DEBUG",
+
+	"broker": "higgsino.physics.ucsb.edu",
+	"queue": "metadata"
+
+}

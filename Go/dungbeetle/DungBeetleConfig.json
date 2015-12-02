@@ -1,0 +1,12 @@
+{
+	"log-level": "INFO",
+
+	"maximum-age": "2h",
+
+	"root-dirs": [
+	    "/my/data/hot-dir", 
+	    "/my/data/warm-dir"
+	],
+
+	"wait-interval": "30m"
+}
