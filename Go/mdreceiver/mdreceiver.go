@@ -10,11 +10,9 @@ import (
 	"strings"
 	//"sync"
 	"time"
-	"unsafe"
 
 	"github.com/kardianos/osext"
 	"github.com/spf13/viper"
-	"github.com/ugorji/go/codec"
 
 	"github.com/project8/dripline/go/dripline"
 
@@ -199,10 +197,7 @@ receiverLoop:
 						continue receiverLoop
 					}
 
-					encoded := make([]byte, 0, unsafe.Sizeof(metadataIfc))
-					handle := new(codec.JsonHandle)
-					encoder := codec.NewEncoderBytes(&(encoded), handle)
-					jsonErr := encoder.Encode(metadataIfc)
+					encoded, jsonErr := utility.IfcToJSON(&metadataIfc)
 					if jsonErr != nil {
 						if sendErr := PrepareAndSendReply(service, request, dripline.RCErrDripPayload, "Unable to convert metadata to JSON", MasterSenderInfo); sendErr != nil {
 							break receiverLoop
