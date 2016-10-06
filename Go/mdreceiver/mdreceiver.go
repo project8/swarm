@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -151,9 +152,8 @@ receiverLoop:
 				}
 				logging.Log.Debug("Command instruction: %s", instruction)
 				switch instruction {
-				//case "write_metadata":
-				case "":
-					logging.Log.Debug("Received \"write_metadata\" instruction")
+				case "write_json":
+					logging.Log.Debug("Received \"write_json\" instruction")
 					//logging.Log.Warning("type: %v", reflect.TypeOf(request.Message.Payload))
 					//logging.Log.Warning("try printing the payload? \n%v", request.Message.Payload)
 					payloadAsMap, okPAM := request.Message.Payload.(map[interface{}]interface{})
@@ -180,26 +180,32 @@ receiverLoop:
 					logging.Log.Debug("Filename to write: %s", thePath)
 
 					dir, _ := filepath.Split(thePath)
-					if mkdirErr := os.MkdirAll(dir, os.ModeDir | 0775); mkdirErr != nil {
-						if sendErr := PrepareAndSendReply(service, request, dripline.RCErrHW, "Unable to create directory; aborting", MasterSenderInfo); sendErr != nil {
+					// check whether the directory exists
+					_, dirStatErr := os.Stat(dir)
+					if dirStatErr != nil && os.IsNotExist(dirStatErr) {
+						if mkdirErr := os.MkdirAll(dir, os.ModeDir | 0775); mkdirErr != nil {
+							msgText := fmt.Sprintf("Unable to create the directory <%q>", dir)
+							if sendErr := PrepareAndSendReply(service, request, dripline.RCErrHW, msgText, MasterSenderInfo); sendErr != nil {
+								break receiverLoop
+							}
+							continue receiverLoop
+						}
+						// Add a small delay after creating the new directory so that anything (e.g. Hornet) waiting for that directory can react to it before the JSON file is created
+						time.Sleep(100 * time.Millisecond)
+					}
+					contentsIfc, hasContents := payloadAsMap["contents"]
+					if ! hasContents {
+						msgText := fmt.Sprintf("No file contents present in the message for <%q>", thePath)
+						if sendErr := PrepareAndSendReply(service, request, dripline.RCErrDripPayload, msgText, MasterSenderInfo); sendErr != nil {
 							break receiverLoop
 						}
 						continue receiverLoop
 					}
-					// Add a small delay after creating the new directory so that anything (e.g. Hornet) waiting for that directory can react to it before the JSON file is created
-					time.Sleep(100 * time.Millisecond)
 
-					metadataIfc, hasMetadata := payloadAsMap["metadata"]
-					if ! hasMetadata {
-						if sendErr := PrepareAndSendReply(service, request, dripline.RCErrDripPayload, "No metadata present in message; aborting", MasterSenderInfo); sendErr != nil {
-							break receiverLoop
-						}
-						continue receiverLoop
-					}
-
-					encoded, jsonErr := utility.IfcToJSON(&metadataIfc)
+					encoded, jsonErr := utility.IfcToJSON(&contentsIfc)
 					if jsonErr != nil {
-						if sendErr := PrepareAndSendReply(service, request, dripline.RCErrDripPayload, "Unable to convert metadata to JSON", MasterSenderInfo); sendErr != nil {
+						msgText := fmt.Sprintf("Unable to convert file contents to JSON for <%q>", thePath)
+						if sendErr := PrepareAndSendReply(service, request, dripline.RCErrDripPayload, msgText, MasterSenderInfo); sendErr != nil {
 							break receiverLoop
 						}
 						continue receiverLoop
@@ -207,7 +213,8 @@ receiverLoop:
 
 					theFile, fileErr := os.Create(thePath)
 					if fileErr != nil {
-						if sendErr := PrepareAndSendReply(service, request, dripline.RCErrHW, "Unable to create file for the metadata", MasterSenderInfo); sendErr != nil {
+						msgText := fmt.Sprintf("Unable to create the file <%q>", thePath)
+						if sendErr := PrepareAndSendReply(service, request, dripline.RCErrHW, msgText, MasterSenderInfo); sendErr != nil {
 							break receiverLoop
 						}
 						continue receiverLoop
@@ -216,7 +223,8 @@ receiverLoop:
 					_, writeErr := theFile.Write(encoded)
 					if writeErr != nil {
 						theFile.Close()
-						if sendErr := PrepareAndSendReply(service, request, dripline.RCErrHW, "Unable to write metadata to file", MasterSenderInfo); sendErr != nil {
+						msgText := fmt.Sprintf("Unable to write to the file <%q>", thePath)
+						if sendErr := PrepareAndSendReply(service, request, dripline.RCErrHW, msgText, MasterSenderInfo); sendErr != nil {
 							break receiverLoop
 						}
 						continue receiverLoop
@@ -224,13 +232,15 @@ receiverLoop:
 
 					closeErr := theFile.Close()
 					if closeErr != nil {
-						if sendErr := PrepareAndSendReply(service, request, dripline.RCErrHW, "Unable to close the metadata file", MasterSenderInfo); sendErr != nil {
+						msgText := fmt.Sprintf("Unable to close the file <%q>", thePath)
+						if sendErr := PrepareAndSendReply(service, request, dripline.RCErrHW, msgText, MasterSenderInfo); sendErr != nil {
 							break receiverLoop
 						}
 						continue receiverLoop
 					}
 
-					if sendErr := PrepareAndSendReply(service, request, dripline.RCSuccess, "Metadata file written", MasterSenderInfo); sendErr != nil {
+					msgText := fmt.Sprintf("File written: %q", thePath)
+					if sendErr := PrepareAndSendReply(service, request, dripline.RCSuccess, msgText, MasterSenderInfo); sendErr != nil {
 						break receiverLoop
 					}
 
