@@ -81,20 +81,20 @@ func main() {
 	if configFile != "" {
 		viper.SetConfigFile(configFile)
 		if parseErr := viper.ReadInConfig(); parseErr != nil {
-			logging.Log.Critical("%v", parseErr)
+			logging.Log.Criticalf("%v", parseErr)
 			os.Exit(1)
 		}
 		logging.Log.Notice("Config file loaded")
 	}
 	logging.ConfigureLogging(viper.GetString("log-level"))
-	logging.Log.Info("Log level: %v", viper.GetString("log-level"))
+	logging.Log.Infof("Log level: %v", viper.GetString("log-level"))
 
 	broker := viper.GetString("broker")
 	queueName := viper.GetString("queue")
 
 	// check authentication for desired username
 	if authErr := authentication.Load(); authErr != nil {
-		logging.Log.Critical("Error in loading authenticators: %v", authErr)
+		logging.Log.Criticalf("Error in loading authenticators: %v", authErr)
 		os.Exit(1)
 	}
 
@@ -116,12 +116,12 @@ func main() {
 	logging.Log.Info("AMQP service started")
 
 	if subscribeErr := service.SubscribeToRequests(queueName); subscribeErr != nil {
-		logging.Log.Critical("Could not subscribe to requests: %v", subscribeErr)
+		logging.Log.Criticalf("Could not subscribe to requests: %v", subscribeErr)
 		os.Exit(1)
 	}
 
 	if msiErr := fillMasterSenderInfo(); msiErr != nil {
-		logging.Log.Critical("Could not fill out master sender info: %v", MasterSenderInfo)
+		logging.Log.Criticalf("Could not fill out master sender info: %v", MasterSenderInfo)
 		os.Exit(1)
 	}
 
@@ -150,12 +150,12 @@ receiverLoop:
 				if request.Message.Target != queueName {
 					instruction = strings.TrimPrefix(request.Message.Target, queueName + ".")
 				}
-				logging.Log.Debug("Command instruction: %s", instruction)
+				logging.Log.Debugf("Command instruction: %s", instruction)
 				switch instruction {
 				case "write_json":
 					logging.Log.Debug("Received \"write_json\" instruction")
-					//logging.Log.Warning("type: %v", reflect.TypeOf(request.Message.Payload))
-					//logging.Log.Warning("try printing the payload? \n%v", request.Message.Payload)
+					//logging.Log.Warningf("type: %v", reflect.TypeOf(request.Message.Payload))
+					//logging.Log.Warningf("try printing the payload? \n%v", request.Message.Payload)
 					payloadAsMap, okPAM := request.Message.Payload.(map[interface{}]interface{})
 					if ! okPAM {
 						if sendErr := PrepareAndSendReply(service, request, dripline.RCErrDripPayload, "Unable to convert payload to map; aborting message", MasterSenderInfo); sendErr != nil {
@@ -177,7 +177,7 @@ receiverLoop:
 						}
 						continue receiverLoop
 					}
-					logging.Log.Debug("Filename to write: %s", thePath)
+					logging.Log.Debugf("Filename to write: %s", thePath)
 
 					dir, _ := filepath.Split(thePath)
 					// check whether the directory exists
@@ -267,14 +267,14 @@ receiverLoop:
 func PrepareAndSendReply(service *dripline.AmqpService, request dripline.Request, retCode dripline.MsgCodeT, returnMessage string, senderInfo dripline.SenderInfo) (e error) {
 	e = nil
 	if retCode == dripline.RCSuccess {
-		logging.Log.Debug("Sending reply: (%v) %s", retCode, returnMessage)
+		logging.Log.Debugf("Sending reply: (%v) %s", retCode, returnMessage)
 	} else {
-		logging.Log.Warning("Sending reply: (%v) %s", retCode, returnMessage)
+		logging.Log.Warningf("Sending reply: (%v) %s", retCode, returnMessage)
 	}
 	reply := dripline.PrepareReplyToRequest(request, retCode, returnMessage, senderInfo)
 	e = service.SendReply(reply);
 	if e != nil {
-		logging.Log.Error("Could not send the reply: %v", e)
+		logging.Log.Errorf("Could not send the reply: %v", e)
 	}
 	return
 }

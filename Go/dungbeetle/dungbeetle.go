@@ -16,33 +16,33 @@ import (
 // processDir will remove empty directories older than maxAge, and recursively process children of non-empty directories
 func processDir(dirInfo os.FileInfo, basePath string, maxAge time.Duration) error {
 	dirName := filepath.Join(basePath, dirInfo.Name())
-	logging.Log.Debug("Processing directory <%s>", dirName)
+	logging.Log.Debugf("Processing directory <%s>", dirName)
 	dirContents, readDirErr := ioutil.ReadDir(dirName)
 	if readDirErr != nil {
-		logging.Log.Error("Unable to read directory <%s>: %v", dirName, readDirErr)
+		logging.Log.Errorf("Unable to read directory <%s>: %v", dirName, readDirErr)
 		return readDirErr
 	}
 	if len(dirContents) == 0 {
 
 		// Directory is empty, check if we need to remove it
-		logging.Log.Debug("Directory is empty; checking age")
+		logging.Log.Debugf("Directory is empty; checking age")
 		if time.Since(dirInfo.ModTime()) > maxAge {
 			// Ok, then remove the directory
 			if remErr := os.Remove(dirName); remErr != nil {
-				logging.Log.Error("Unable to remove an empty directory <%s>: %v", dirName, remErr)
+				logging.Log.Errorf("Unable to remove an empty directory <%s>: %v", dirName, remErr)
 				return remErr
 			}
-			logging.Log.Info("Successfully removed directory <%s>", dirName)
+			logging.Log.Infof("Successfully removed directory <%s>", dirName)
 		}
 
 	} else {
 
 		// Directory is not empty; process its contents
 		for _, fileInfo := range dirContents {
-			logging.Log.Debug("Directory <%s> is not empty; processing contents", dirName)
+			logging.Log.Debugf("Directory <%s> is not empty; processing contents", dirName)
 			if fileInfo.IsDir() {
 				if procErr := processDir(fileInfo, dirName, maxAge); procErr != nil {
-					logging.Log.Error("An error occurred while processing directory <%s>: %v", fileInfo.Name(), procErr)
+					logging.Log.Errorf("An error occurred while processing directory <%s>: %v", fileInfo.Name(), procErr)
 					// pass errors back up through recursion chain
 					return procErr
 				}
@@ -51,7 +51,7 @@ func processDir(dirInfo os.FileInfo, basePath string, maxAge time.Duration) erro
 
 	}
 
-	logging.Log.Debug("No action taken on directory <%s>", dirName)
+	logging.Log.Debugf("No action taken on directory <%s>", dirName)
 	return nil
 }
 
@@ -132,13 +132,13 @@ fmt.Println("                                                                   
 	if configFile != "" {
 		viper.SetConfigFile(configFile)
 		if parseErr := viper.ReadInConfig(); parseErr != nil {
-			logging.Log.Critical("%v", parseErr)
+			logging.Log.Criticalf("%v", parseErr)
 			os.Exit(1)
 		}
 		logging.Log.Notice("Config file loaded")
 	}
 	logging.ConfigureLogging(viper.GetString("log-level"))
-	logging.Log.Info("Log level: %v", viper.GetString("log-level"))
+	logging.Log.Infof("Log level: %v", viper.GetString("log-level"))
 
 	maxAge := viper.GetDuration("maximum-age")
 	waitInterval := viper.GetDuration("wait-interval")
@@ -153,18 +153,18 @@ fmt.Println("                                                                   
 	for rdInd, rootDir := range rootDirs {
 		rootDirAbs, rdErr := filepath.Abs(filepath.Clean(rootDir))
 		if rdErr != nil {
-			logging.Log.Critical("Unable to get absolute form of the root directory <%s>", rootDir)
+			logging.Log.Criticalf("Unable to get absolute form of the root directory <%s>", rootDir)
 			os.Exit(1)
 		}
 
 		// Do a couple checks on the root directory
 		rootDirInfo, statErr := os.Stat(rootDirAbs)
 		if statErr != nil {
-			logging.Log.Critical("Unable to \"Stat\" the root directory <%s>", rootDirAbs)
+			logging.Log.Criticalf("Unable to \"Stat\" the root directory <%s>", rootDirAbs)
 			os.Exit(1)
 		}
 		if ! rootDirInfo.IsDir() {
-			logging.Log.Critical("Root directory <%s> is not a directory", rootDirAbs)
+			logging.Log.Criticalf("Root directory <%s> is not a directory", rootDirAbs)
 			os.Exit(1)
 		}
 
@@ -179,26 +179,26 @@ fmt.Println("                                                                   
 		// Loop over the contents of rootDirs
 		// We don't apply processDir() directly to the rootDirs because we don't want to delete rootDir if it's empty
 		for _, rootDir := range rootDirs {
-			logging.Log.Debug("Processing directory <%s>", rootDir)
+			logging.Log.Debugf("Processing directory <%s>", rootDir)
 
 			dirContents, readDirErr := ioutil.ReadDir(rootDir)
 			if readDirErr != nil {
-				logging.Log.Critical("Unable to read directory <%s>", rootDir)
+				logging.Log.Criticalf("Unable to read directory <%s>", rootDir)
 				os.Exit(1)
 			}
 
 			exitOnErrors := false
 
 			for _, fileInfo := range dirContents {
-				logging.Log.Debug("Directory <%s> is not empty; processing contents", rootDir)
+				logging.Log.Debugf("Directory <%s> is not empty; processing contents", rootDir)
 				if fileInfo.IsDir() {
 					if procErr := processDir(fileInfo, rootDir, maxAge); procErr != nil {
-						logging.Log.Error("An error occurred while processing directory <%s>: %v", fileInfo.Name(), procErr)
+						logging.Log.Errorf("An error occurred while processing directory <%s>: %v", fileInfo.Name(), procErr)
 						exitOnErrors = true
 					}
 				} // else it's a file; ignore it
 			}
-			logging.Log.Debug("Finished processing <%s>", rootDir)
+			logging.Log.Debugf("Finished processing <%s>", rootDir)
 
 			if exitOnErrors == true {
 				logging.Log.Critical("Exiting due to directory-processing errors")
