@@ -115,8 +115,10 @@ func main() {
 	}
 	logging.Log.Info("AMQP service started")
 
-	if subscribeErr := service.SubscribeToRequests(queueName); subscribeErr != nil {
-		logging.Log.Criticalf("Could not subscribe to requests: %v", subscribeErr)
+	// add .# to the queue name for the subscription 
+	subscriptionKey := queueName + ".#"
+	if subscribeErr := service.SubscribeToRequests(subscriptionKey); subscribeErr != nil {
+		logging.Log.Criticalf("Could not subscribe to requests at <%v>: %v", subscriptionKey, subscribeErr)
 		os.Exit(1)
 	}
 
