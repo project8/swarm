@@ -52,12 +52,12 @@ func main() {
 	// load config
 	viper.SetConfigFile(configFile)
 	if parseErr := viper.ReadInConfig(); parseErr != nil {
-		logging.Log.Critical("%v", parseErr)
+		logging.Log.Criticalf("%v", parseErr)
 		os.Exit(1)
 	}
 	logging.Log.Notice("Config file loaded")
 	logging.ConfigureLogging(viper.GetString("log-level"))
-	logging.Log.Info("Log level: %v", viper.GetString("log-level"))
+	logging.Log.Infof("Log level: %v", viper.GetString("log-level"))
 
 	userName := viper.GetString("username")
 
@@ -68,18 +68,18 @@ func main() {
 
 	// check authentication for desired username
 	if authErr := authentication.Load(); authErr != nil {
-		logging.Log.Critical("Error in loading authenticators: %v", authErr)
+		logging.Log.Criticalf("Error in loading authenticators: %v", authErr)
 		os.Exit(1)
 	}
 
 	if ! authentication.SlackAvailable(userName) {
-		logging.Log.Critical("Authentication for user <%s> is not available", userName)
+		logging.Log.Criticalf("Authentication for user <%s> is not available", userName)
 		os.Exit(1)
 	}
 	authToken := authentication.SlackToken(userName)
 
-	logging.Log.Info("Slack username: %s", userName)
-	logging.Log.Info("Slack token: %s", authToken)
+	logging.Log.Infof("Slack username: %s", userName)
+	logging.Log.Infof("Slack token: %s", authToken)
 
 	// get the slack API object
 	api := slack.New(authToken)
@@ -92,7 +92,7 @@ func main() {
 	userID := ""
 	users, usersErr := api.GetUsers()
 	if usersErr != nil {
-		logging.Log.Critical("Unable to get users: %s", usersErr)
+		logging.Log.Criticalf("Unable to get users: %s", usersErr)
 		os.Exit(1)
 	} else {
 usernameLoop:
@@ -104,22 +104,22 @@ usernameLoop:
 		}
 	}
 	if userID == "" {
-		logging.Log.Critical("Could not get user ID for user <%s>", userName)
+		logging.Log.Criticalf("Could not get user ID for user <%s>", userName)
 		os.Exit(1)
 	}
-	logging.Log.Info("User ID: %s", userID)
+	logging.Log.Infof("User ID: %s", userID)
 
 	// get map of channel IDs
 	var allChannelMap map[string]string
 	channels, chanErr := api.GetChannels(true)
 	if chanErr != nil {
-		logging.Log.Critical("Unable to get channels: %s", chanErr)
+		logging.Log.Criticalf("Unable to get channels: %s", chanErr)
 		os.Exit(1)
 	} else {
 		allChannelMap = make(map[string]string, len(channels))
 		for _, aChan := range channels {
 			allChannelMap[aChan.Name] = aChan.ID
-			logging.Log.Debug("Channel %s has ID %s", aChan.Name, aChan.ID)
+			logging.Log.Debugf("Channel %s has ID %s", aChan.Name, aChan.ID)
 		}
 	}
 
@@ -131,7 +131,7 @@ usernameLoop:
 	for channelName, _ := range channelsRaw {
 		// get channel ID
 		if channelID, channelExists := allChannelMap[channelName]; channelExists == true {
-			logging.Log.Info("(%s) Found request for channel %s", channelID, channelName)
+			logging.Log.Infof("(%s) Found request for channel %s", channelID, channelName)
 			//channelInfo := channelInfoRaw.(map[string](interface{}))
 
 			channelConfigName := "channels." + channelName
@@ -146,7 +146,7 @@ usernameLoop:
 			}
 
 			if sizeLimit < 0 {
-				logging.Log.Error("(%s) Invalid size limit", channelID)
+				logging.Log.Errorf("(%s) Invalid size limit", channelID)
 				continue
 			}
 
@@ -171,7 +171,7 @@ usernameLoop:
 				}
 				recipientChan <- recipient
 
-				logging.Log.Notice("(%s) Launching monitorChannel", channelID)
+				logging.Log.Noticef("(%s) Launching monitorChannel", channelID)
 				threadWait.Add(1)
 				go monitorChannel(channelID, api, recipient.eventChan, msgQueue, monitorSize, doLogging, histCond, &threadWait)
 	
@@ -182,12 +182,12 @@ usernameLoop:
 				sizeLimit++
 			}
 
-			logging.Log.Notice("(%s) Launching cleanHistory", channelID)
+			logging.Log.Noticef("(%s) Launching cleanHistory", channelID)
 			threadWait.Add(1)
 			go cleanHistory(channelID, api, msgQueue, sizeLimit, histCond, &threadWait)
 
 		} else {
-			logging.Log.Warning("Channel <%s> does not exist", channelName)
+			logging.Log.Warningf("Channel <%s> does not exist", channelName)
 		}
 	}
 
@@ -206,14 +206,14 @@ func cleanHistory(channelID string, api *slack.Client, msgQueue *utility.Queue, 
 	histCond.L.Lock()
 	defer histCond.L.Unlock()
 
-	logging.Log.Info("(%s) Starting cleanHistory", channelID)
+	logging.Log.Infof("(%s) Starting cleanHistory", channelID)
 	histParams := slack.NewHistoryParameters()
 	histParams.Inclusive = true
 
 	histCountMax := 1000
 
 	// build history with histSize messages
-	logging.Log.Info("(%s) Building history with %v messages", channelID, histSize)
+	logging.Log.Infof("(%s) Building history with %v messages", channelID, histSize)
 	var history *slack.History
 	var histErr error
 	nRemaining := histSize
@@ -226,18 +226,18 @@ func cleanHistory(channelID string, api *slack.Client, msgQueue *utility.Queue, 
 
 		history, histErr = api.GetChannelHistory(channelID, histParams)
 		if histErr != nil {
-			logging.Log.Error("(%s) Unable to get the channel history: %v", channelID, histErr)
+			logging.Log.Errorf("(%s) Unable to get the channel history: %v", channelID, histErr)
 			return
 		}
 
 		iLastMsg := len(history.Messages) - 1
 		//logging.Log.Debug("0: %v, %v: %v", history.Messages[0].Timestamp, iLastMsg, history.Messages[iLastMsg].Timestamp)
 
-		logging.Log.Debug("(%s) In skip loop; obtained history with %v messages", channelID, len(history.Messages))
+		logging.Log.Debugf("(%s) In skip loop; obtained history with %v messages", channelID, len(history.Messages))
 
 		for iMsg := iLastMsg; iMsg >= 0; iMsg-- {
 			msgQueue.Push(history.Messages[iMsg].Timestamp)
-			//logging.Log.Debug("(%s) Pushing to queue: %s", channelID, history.Messages[iMsg].Timestamp)
+			//logging.Log.Debugf("(%s) Pushing to queue: %s", channelID, history.Messages[iMsg].Timestamp)
 		}
 
 		if ! history.HasMore {
@@ -253,24 +253,24 @@ func cleanHistory(channelID string, api *slack.Client, msgQueue *utility.Queue, 
 	for history.HasMore == true {
 		history, histErr = api.GetChannelHistory(channelID, histParams)
 		if histErr != nil {
-			logging.Log.Error("(%s) Unable to get the channel history: %v", channelID, histErr)
+			logging.Log.Errorf("(%s) Unable to get the channel history: %v", channelID, histErr)
 			return
 		}
 
-		logging.Log.Debug("(%s) Deleting %v items (latest: %v)", channelID, len(history.Messages), history.Latest)
+		logging.Log.Debugf("(%s) Deleting %v items (latest: %v)", channelID, len(history.Messages), history.Latest)
 
 		for _/*iMsg*/, message := range history.Messages {
-			//logging.Log.Debug("(%s) Deleting: %s", channelID, message.Timestamp)
+			//logging.Log.Debugf("(%s) Deleting: %s", channelID, message.Timestamp)
 			_, _, /*respChan, respTS,*/ respErr := api.DeleteMessage(channelID, message.Timestamp)
 			if respErr != nil {
-				logging.Log.Warning("(%s) Unable to delete message: %v", channelID, respErr)
+				logging.Log.Warningf("(%s) Unable to delete message: %v", channelID, respErr)
 			}
-			//logging.Log.Debug("(%s) Deletion response: %s, %s, %v", channelID, respChan, respTS, respErr)
+			//logging.Log.Debugf("(%s) Deletion response: %s, %s, %v", channelID, respChan, respTS, respErr)
 			nDeleted++
 		}
 		histParams.Latest = history.Messages[len(history.Messages)-1].Timestamp
 	}
-	logging.Log.Notice("(%s) Deleted %v messages", channelID, nDeleted)
+	logging.Log.Noticef("(%s) Deleted %v messages", channelID, nDeleted)
 
 	return
 }
@@ -298,7 +298,7 @@ monitorLoop:
 		select {
 		case recipient := <-recipientChan:
 			eventRecipients[recipient.channelID] = recipient.eventChan
-			logging.Log.Debug("Added event recipient for %v", recipient.channelID)
+			logging.Log.Debugf("Added event recipient for %v", recipient.channelID)
 
 		case event, chanOpen := <-rtm.IncomingEvents:
 			if ! chanOpen {
@@ -312,12 +312,12 @@ monitorLoop:
 			case *slack.ConnectedEvent:
 				//logging.Log.Info("Infos:", evData.Info)
 				logging.Log.Info("Connected to Slack")
-				logging.Log.Info("Connection counter: %v", evData.ConnectionCount)
+				logging.Log.Infof("Connection counter: %v", evData.ConnectionCount)
 				// Replace #general with your Channel ID
 				//rtm.SendMessage(rtm.NewOutgoingMessage("Hello world", "#general"))
 
 			case *slack.MessageEvent:
-				//logging.Log.Info("Message: %v", evData)
+				//logging.Log.Infof("Message: %v", evData)
 				if evData.SubType != "" {
 					break
 				}
@@ -326,13 +326,13 @@ monitorLoop:
 				}
 
 			//case *slack.PresenceChangeEvent:
-			//	logging.Log.Info("Presence Change: %v", evData)
+			//	logging.Log.Infof("Presence Change: %v", evData)
 
 			case *slack.LatencyReport:
-				logging.Log.Info("Current latency: %v", evData.Value)
+				logging.Log.Infof("Current latency: %v", evData.Value)
 
 			case *slack.RTMError:
-				logging.Log.Warning("RTM Error: %s", evData.Error())
+				logging.Log.Warningf("RTM Error: %s", evData.Error())
 
 			case *slack.InvalidAuthEvent:
 				logging.Log.Error("Invalid credentials")
@@ -341,7 +341,7 @@ monitorLoop:
 			default:
 
 				// Ignore other events..
-				//logging.Log.Info("Unexpected: %v", event.Data)
+				//logging.Log.Infof("Unexpected: %v", event.Data)
 			}
 		}
 	}
@@ -351,39 +351,39 @@ monitorLoop:
 
 func monitorChannel(channelID string, api *slack.Client, messageChan <-chan *slack.MessageEvent, msgQueue *utility.Queue, monitorSize, doLogging bool, histCond *sync.Cond, threadWait *sync.WaitGroup) {
 	defer threadWait.Done()
-	defer logging.Log.Notice("(%s) Finished monitoring channel", channelID)
+	defer logging.Log.Noticef("(%s) Finished monitoring channel", channelID)
 
-	logging.Log.Info("(%s) Waiting for history", channelID)
+	logging.Log.Infof("(%s) Waiting for history", channelID)
 	histCond.L.Lock()
 	histCond.Wait()
 	histCond.L.Unlock()
 
-	logging.Log.Debug("(%s) Message queue has %v items", channelID, msgQueue.Len())
+	logging.Log.Debugf("(%s) Message queue has %v items", channelID, msgQueue.Len())
 
-	logging.Log.Info("(%s) Monitor size: %v", channelID, monitorSize)
-	logging.Log.Info("(%s) Do logging: %v", channelID, doLogging)
+	logging.Log.Infof("(%s) Monitor size: %v", channelID, monitorSize)
+	logging.Log.Infof("(%s) Do logging: %v", channelID, doLogging)
 
-	logging.Log.Info("(%s) Waiting for events", channelID)
+	logging.Log.Infof("(%s) Waiting for events", channelID)
 monitorLoop:
 	for {
 		select {
 		case message, chanOpen := <-messageChan:
 			if ! chanOpen {
-				logging.Log.Error("(%s) Incoming message channel is closed", channelID)
+				logging.Log.Errorf("(%s) Incoming message channel is closed", channelID)
 				break monitorLoop
 			}
 			/*
-			logging.Log.Debug("(%s) Received message", channelID)
-			logging.Log.Debug("\tUser: %s", message.User)
-			logging.Log.Debug("\tChannel: %s", message.Channel)
-			logging.Log.Debug("\tTimestamp: %s", message.Timestamp)
-			logging.Log.Debug("\tText: %s", message.Text)
-			logging.Log.Debug("\tSubtype: %s", message.SubType)
+			logging.Log.Debugf("(%s) Received message", channelID)
+			logging.Log.Debugf("\tUser: %s", message.User)
+			logging.Log.Debugf("\tChannel: %s", message.Channel)
+			logging.Log.Debugf("\tTimestamp: %s", message.Timestamp)
+			logging.Log.Debugf("\tText: %s", message.Text)
+			logging.Log.Debugf("\tSubtype: %s", message.SubType)
 			*/
 
 			msgQueue.Push(message.Timestamp)
 			toDelete := msgQueue.Poll().(string)
-			//logging.Log.Debug("(%s) Adding to queue: %s; Removing from queue: %s", channelID, message.Timestamp, toDelete)
+			//logging.Log.Debugf("(%s) Adding to queue: %s; Removing from queue: %s", channelID, message.Timestamp, toDelete)
 			api.DeleteMessage(channelID, toDelete)
 
 		}
