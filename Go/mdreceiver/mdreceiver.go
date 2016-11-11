@@ -75,7 +75,7 @@ func main() {
 	// defult configuration
 	viper.SetDefault("log-level", "INFO")
 	viper.SetDefault("broker", "localhost")
-	viper.SetDefault("queue", "metadata")
+	viper.SetDefault("queue", "mdreceiver")
 
 	// load config
 	if configFile != "" {
