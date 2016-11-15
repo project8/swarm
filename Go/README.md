@@ -23,3 +23,13 @@ Once you have your Golang environemnt set up ([e.g.](http://golang.org/doc/code.
 ```
 
 The ellipses are important, as they tell Go that packages exist in subdirectories.
+
+## Updating
+
+Use `go get` to get, build, and install the updated package.  The `-u` option for `go get` must be included to update swarm and its dependencies:
+
+```
+> go get -u github.com/project8/swarm/...
+```
+
+If there are problems updating either swarm or some of its dependencies, simply delete the appropriate directory in the [go root]/src directory, and repeate the `go get -u` command.
