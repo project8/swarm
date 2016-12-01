@@ -1,8 +1,6 @@
 {
 	"log-level": "INFO",
-	"computer-name": "WE30935",
 	"broker": "higgsino.physics.ucsb.edu",
-	"queue": "computer_status",
 	"where-to-look": ["/data/hot","/data/warm"],
 	"wait-interval": "1m"
 

@@ -104,8 +104,8 @@ func main() {
 	// defult configuration
 	viper.SetDefault("log-level", "INFO")
 	viper.SetDefault("broker", "localhost")
-	viper.SetDefault("computername", "SarahJane")
-	viper.SetDefault("queue", "computer_status")
+	// viper.SetDefault("computername", MasterSenderInfo.Hostname)
+	// viper.SetDefault("queue", "disk_status")
 	viper.SetDefault("wait-interval", "1m")
 
 	// load config
@@ -126,9 +126,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	computername := viper.GetString("computer-name")
+	// computername := viper.GetString("computer-name")
+	computername,e   := os.Hostname()
+	if e != nil {
+		logging.Log.Criticalf("Couldn't get the hostname")
+		return
+	}
 	broker := viper.GetString("broker")
-	queueName := viper.GetString("queue")
+	queueName := "disk_status"
+	// queueName := viper.GetString("queue")
 	waitInterval := viper.GetDuration("wait-interval")
 
 	// check authentication for desired username
