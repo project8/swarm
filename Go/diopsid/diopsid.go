@@ -53,7 +53,7 @@ const (
 
 var MasterSenderInfo dripline.SenderInfo
 func fillMasterSenderInfo() (e error) {
-	MasterSenderInfo.Package = "bee"
+	MasterSenderInfo.Package = "diopsid"
 	MasterSenderInfo.Exe, e = osext.Executable()
 	if e != nil {
 		return
