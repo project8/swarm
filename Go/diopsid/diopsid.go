@@ -15,6 +15,7 @@ import (
 
 	"github.com/kardianos/osext"
 	"github.com/spf13/viper"
+	// could not make the following go program install so I copied the code in the program here
 	// "github.com/lunny/diskinfo.go"
 
 	"github.com/project8/dripline/go/dripline"
@@ -104,8 +105,6 @@ func main() {
 	// defult configuration
 	viper.SetDefault("log-level", "INFO")
 	viper.SetDefault("broker", "localhost")
-	// viper.SetDefault("computername", MasterSenderInfo.Hostname)
-	// viper.SetDefault("queue", "disk_status")
 	viper.SetDefault("wait-interval", "1m")
 
 	// load config
@@ -127,7 +126,7 @@ func main() {
 	}
 
 	// computername := viper.GetString("computer-name")
-	computername,e   := os.Hostname()
+	computername,e := os.Hostname()
 	if e != nil {
 		logging.Log.Criticalf("Couldn't get the hostname")
 		return
@@ -173,7 +172,6 @@ func main() {
 
 
   for {
-		// fmt.Printf("Here %b",waitInterval)
 		for _, dir := range wheretolook {
 			alert := dripline.PrepareAlert(queueName + "." + computername,"application/json",MasterSenderInfo)
 			disk := DiskUsage(dir)
@@ -186,14 +184,11 @@ func main() {
 
 			e := service.SendAlert(alert)
 			logging.Log.Infof("Alert sent: [%s] All: %.2f GB Used: %.2f GB",dir,float64(disk.All)/float64(GB),float64(disk.Used)/float64(GB))
-			// reply := dripline.PrepareReplyToRequest(request, retCode, returnMessage, senderInfo)
-			// e = service.SendReply(reply);
 			if e != nil {
 				logging.Log.Errorf("Could not send the alert: %v", e)
 			}
 		}
 		logging.Log.Infof("Sleeping now")
-		// fmt.Printf("Free: %.2f GB\n", float64(disk.Free)/float64(GB))
 		time.Sleep(waitInterval)
 	}
 }
