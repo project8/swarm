@@ -180,7 +180,7 @@ func main() {
 			disk := DiskUsage(dir)
 			var payload map[string]interface{}
 			payload = make(map[string]interface{})
-			payload["dir"] = dir
+			payload["directory"] = dir
 			payload["all"] = float64(disk.All)/float64(GB)
 			payload["used"] = float64(disk.Used)/float64(GB)
 			alert.Message.Payload = payload
