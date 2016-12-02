@@ -1,0 +1,7 @@
+{
+	"log-level": "INFO",
+	"broker": "higgsino.physics.ucsb.edu",
+	"where-to-look": ["/data/hot","/data/warm"],
+	"wait-interval": "1m"
+
+}

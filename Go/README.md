@@ -4,6 +4,9 @@
 
 ### Executables
 
+* **diopsid** -- Monitors disk usage and sends dripline alerts
+* **dungbeetle** -- Cleans up empty folders
+* **mdreceiver** -- Receives data via dripline and saves JSON files
 * **SlackMonitor** -- Cleans channel histories and maintains history size limits
 
 ### Packages
