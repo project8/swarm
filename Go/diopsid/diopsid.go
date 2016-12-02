@@ -1,3 +1,7 @@
+// This program will look at specified folder on the machine where it is running and get the total and the used spaces.
+// It will then send an alert to the disk_status.name_of_computer queue about these two pieces of information.
+// It will then go to sleep for a specified amount of time.
+// Author: Mathieu Guigue (Last update: Dec 1 2016)
 package main
 
 import (
@@ -15,7 +19,7 @@ import (
 
 	"github.com/kardianos/osext"
 	"github.com/spf13/viper"
-	// could not make the following go program install so I copied the code in the program here
+	// could not install the following go program so I copied the code in the program here
 	// "github.com/lunny/diskinfo.go"
 
 	"github.com/project8/dripline/go/dripline"
@@ -169,7 +173,6 @@ func main() {
 		logging.Log.Criticalf("Could not fill out master sender info: %v", MasterSenderInfo)
 		os.Exit(1)
 	}
-
 
   for {
 		for _, dir := range wheretolook {
