@@ -174,7 +174,7 @@ func main() {
 		os.Exit(1)
 	}
 
-  for {
+	for {
 		for _, dir := range wheretolook {
 			alert := dripline.PrepareAlert(queueName + "." + computername,"application/json",MasterSenderInfo)
 			disk := DiskUsage(dir)
