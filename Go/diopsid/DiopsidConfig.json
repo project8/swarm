@@ -1,5 +1,7 @@
 {
 	"log-level": "INFO",
+	"subscribe-queue": "diopsid_namchinename",
+	"alerts-queue": "disk_status.machinename",
 	"broker": "higgsino.physics.ucsb.edu",
 	"where-to-look": ["/data/hot","/data/warm"],
 	"wait-interval": "1m"
