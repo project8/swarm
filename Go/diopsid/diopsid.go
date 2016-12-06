@@ -111,7 +111,7 @@ func main() {
 	viper.SetDefault("broker", "localhost")
 	viper.SetDefault("wait-interval", "1m")
 	viper.SetDefault("subscribe-queue", "diopsid-queue")
-	viper.SetDefault("alerts-queue", "diopsid")
+	viper.SetDefault("alerts-queue", "disk_status.machinename")
 
 	// load config
 	if configFile != "" {
