@@ -110,6 +110,8 @@ func main() {
 	viper.SetDefault("log-level", "INFO")
 	viper.SetDefault("broker", "localhost")
 	viper.SetDefault("wait-interval", "1m")
+	viper.SetDefault("subscribe-queue", "diopsid-queue")
+	viper.SetDefault("alerts-queue", "disk_status.machinename")
 
 	// load config
 	if configFile != "" {
@@ -136,8 +138,8 @@ func main() {
 		return
 	}
 	broker := viper.GetString("broker")
-	queueName := "disk_status"
-	// queueName := viper.GetString("queue")
+	queueName := viper.GetString("subscribe-queue")
+	alertsQueueName := viper.GetString("alerts-queue")
 	waitInterval := viper.GetDuration("wait-interval")
 
 	// check authentication for desired username
@@ -163,9 +165,12 @@ func main() {
 	logging.Log.Info("AMQP service started")
 
 	// add .# to the queue name for the subscription
+	// the queue name does not have to be the same as the queue where to send the alerts!
+	// it is better to define a proper queueName in the config file to prevent
+	// conflict between services subscribing to the same queue (which is not allowed!)
 	subscriptionKey := queueName + ".#"
 	if subscribeErr := service.SubscribeToAlerts(subscriptionKey); subscribeErr != nil {
-		logging.Log.Criticalf("Could not subscribe to requests at <%v>: %v", subscriptionKey, subscribeErr)
+		logging.Log.Criticalf("Could not subscribe to alerts at <%v>: %v", subscriptionKey, subscribeErr)
 		os.Exit(1)
 	}
 
@@ -176,7 +181,7 @@ func main() {
 
 	for {
 		for _, dir := range wheretolook {
-			alert := dripline.PrepareAlert(queueName + "." + computername,"application/json",MasterSenderInfo)
+			alert := dripline.PrepareAlert(alertsQueueName, "application/json", MasterSenderInfo)
 			disk := DiskUsage(dir)
 			var payload map[string]interface{}
 			payload = make(map[string]interface{})
