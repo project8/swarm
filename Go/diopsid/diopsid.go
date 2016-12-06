@@ -132,11 +132,11 @@ func main() {
 	}
 
 	// computername := viper.GetString("computer-name")
-	computername,e := os.Hostname()
-	if e != nil {
-		logging.Log.Criticalf("Couldn't get the hostname")
-		return
-	}
+	// computername,e := os.Hostname()
+	// if e != nil {
+	// 	logging.Log.Criticalf("Couldn't get the hostname")
+	// 	return
+	// }
 	broker := viper.GetString("broker")
 	queueName := viper.GetString("subscribe-queue")
 	alertsQueueName := viper.GetString("alerts-queue")
