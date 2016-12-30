@@ -22,7 +22,7 @@ import (
 	// could not install the following go program so I copied the code in the program here
 	// "github.com/lunny/diskinfo.go"
 
-	"github.com/project8/dripline/go/dripline"
+	"github.com/project8/dripline-go/dripline"
 
 	"github.com/project8/swarm/Go/authentication"
 	"github.com/project8/swarm/Go/logging"

@@ -15,7 +15,7 @@ import (
 	"github.com/kardianos/osext"
 	"github.com/spf13/viper"
 
-	"github.com/project8/dripline/go/dripline"
+	"github.com/project8/dripline-go/dripline"
 
 	"github.com/project8/swarm/Go/authentication"
 	"github.com/project8/swarm/Go/logging"
