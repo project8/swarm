@@ -1,0 +1,7 @@
+{
+	"log-level": "INFO",
+
+	"username": "operator",
+
+	"channel": "test_operator"
+}
