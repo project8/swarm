@@ -15,6 +15,11 @@ import (
 
 var monitorStarted bool = false
 
+
+func getOperatorTag(operator string) (string) {
+	return "(<@" + operator + ">)"
+}
+
 func main() {
 	logging.InitializeLogging()
 
@@ -55,7 +60,7 @@ func main() {
 	logging.ConfigureLogging(viper.GetString("log-level"))
 	logging.Log.Infof("Log level: %v", viper.GetString("log-level"))
 
-	userName := viper.GetString("username")
+	botUserName := viper.GetString("username")
 
 	channelName := viper.GetString("channel")
 
@@ -65,13 +70,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	if ! authentication.SlackAvailable(userName) {
-		logging.Log.Criticalf("Authentication for user <%s> is not available", userName)
+	if ! authentication.SlackAvailable(botUserName) {
+		logging.Log.Criticalf("Authentication for user <%s> is not available", botUserName)
 		os.Exit(1)
 	}
-	authToken := authentication.SlackToken(userName)
+	authToken := authentication.SlackToken(botUserName)
 
-	logging.Log.Infof("Slack username: %s", userName)
+	logging.Log.Infof("Slack username: %s", botUserName)
 	logging.Log.Infof("Slack token: %s", authToken)
 
 	// get the slack API object
@@ -81,27 +86,32 @@ func main() {
 		os.Exit(1)
 	}
 	logging.Log.Info("Created Slack API")
-	// get list of users and then the user ID
-	userID := ""
+
+	// make a map from user ID to name, and a map from user name to ID
+	var userIDMap map[string]string
+	var userNameMap map[string]string
+	userIDMap = make(map[string]string)
+	userNameMap = make(map[string]string)
+	botUserID := ""
 	users, usersErr := api.GetUsers()
 	if usersErr != nil {
 		logging.Log.Criticalf("Unable to get users: %s", usersErr)
 		os.Exit(1)
 	} else {
-usernameLoop:
 		for _, user := range users {
-			if user.Name == userName {
-				userID = user.ID
-				break usernameLoop
+			userIDMap[user.ID] = user.Name
+			userNameMap[user.Name] = user.ID
+			if user.Name == botUserName {
+				botUserID = user.ID
 			}
 		}
 	}
-	if userID == "" {
-		logging.Log.Criticalf("Could not get user ID for user <%s>", userName)
+	if botUserID == "" {
+		logging.Log.Criticalf("Could not get user ID for user <%s>", botUserName)
 		os.Exit(1)
 	}
-	logging.Log.Infof("User ID: %s", userID)
-	userTag := "<@" + userID + ">"
+	logging.Log.Infof("User ID: %s", botUserID)
+	botUserTag := "<@" + botUserID + ">"
 
 	// get map of channel IDs
 	channelID := ""
@@ -122,8 +132,8 @@ usernameLoop:
 		os.Exit(1)
 	}
 
-	theOperator := "nsoblath"
-	theOperatorTag := "(<@" + theOperator + ">)"
+	theOperator := ""
+	theOperatorTag := ""
 
 	logging.Log.Info("Connecting to RTM")
 	rtm := api.NewRTM()
@@ -134,6 +144,76 @@ usernameLoop:
 			logging.Log.Error("Error while disconnecting from the Slack RTM")
 		}
 	}()
+
+	// Setup the commands that are used
+	var commandMap map[string]func(string, *slack.MessageEvent)
+	commandMap = make(map[string]func(string, *slack.MessageEvent))
+	commandMap["!hello"] = func(_ string, msg *slack.MessageEvent) {
+		hiMsg := rtm.NewOutgoingMessage("Hi, " + userIDMap[msg.User], msg.Channel)
+		rtm.SendMessage(hiMsg)
+		return
+	}
+	commandMap["!help"] = func(_ string, msg *slack.MessageEvent) {
+		msgText := "You can either address me with `@operator` or enter a command.\n\n" +
+			"If you address me with `@operator` I'll pass a notification on to the current operator.\n\n" +
+			"If you enter a command, I can take certain actions:\n" +
+			"\t`!hello`: say hi\n" +
+			"\t`!help`: display this help message\n" +
+			"\t`!startshift`: manually start your shift, replacing the existing operator\n" +
+			"\t`!endshift`: remove yourself as the operator\n" +
+			"\t`!overrideshift [username (optional)]`: replace the current operator with a manually-specified operator; if no operator is specified, the current operator will be removed"
+			logging.Log.Debug("Printing help message")
+			helpMsg := rtm.NewOutgoingMessage(msgText, msg.Channel)
+			rtm.SendMessage(helpMsg)
+	}
+	commandMap["!startshift"] = func(_ string, msg *slack.MessageEvent) {
+		logging.Log.Info("Shift starting for user " + userIDMap[msg.User])
+		theOperator = msg.User
+		theOperatorTag = getOperatorTag(theOperator)
+		ssMessage := rtm.NewOutgoingMessage("Happy operating, " + userIDMap[theOperator] + "!", msg.Channel)
+		rtm.SendMessage(ssMessage)
+		return
+	}
+	commandMap["!endshift"] = func(_ string, msg *slack.MessageEvent) {
+		if msg.User != theOperator {
+			logging.Log.Debug("Received end-shift command from non-operator")
+			usMessage := rtm.NewOutgoingMessage("I can't end your shift, because you're not the operator", msg.Channel)
+			rtm.SendMessage(usMessage)
+			return
+		}
+		logging.Log.Info("Shift ended for user " + userIDMap[theOperator])
+		//changeOperator <- ""
+		theOperator = ""
+		theOperatorTag = ""
+		usMessage := rtm.NewOutgoingMessage("Your shift is over, thanks!", msg.Channel)
+		rtm.SendMessage(usMessage)
+		return
+	}
+	commandMap["!overrideshift"] = func(username string, msg *slack.MessageEvent) {
+		if username != "" {
+			logging.Log.Info("Shift starting for user " + username)
+			newUserID, hasID := userNameMap[username]
+			if ! hasID {
+				logging.Log.Warningf("Unknown username: %s", username)
+				osMessage := rtm.NewOutgoingMessage("I'm sorry, I don't recognize that username", msg.Channel)
+				rtm.SendMessage(osMessage)
+				return
+			}
+			theOperator = newUserID
+			theOperatorTag = getOperatorTag(theOperator)
+			osMessage := rtm.NewOutgoingMessage("Happy operating, " + userIDMap[theOperator] + "!", msg.Channel)
+			rtm.SendMessage(osMessage)
+		} else {
+			theOperator = ""
+			theOperatorTag = ""
+			osMessage := rtm.NewOutgoingMessage("Operator has been removed", msg.Channel)
+			rtm.SendMessage(osMessage)
+		}
+		return
+	}
+
+	arrivedMsg := rtm.NewOutgoingMessage("Have no fear, @operator is here!", channelID)
+	rtm.SendMessage(arrivedMsg)
 
 	logging.Log.Info("Waiting for events")
 monitorLoop:
@@ -152,8 +232,6 @@ monitorLoop:
 				//logging.Log.Info("Infos:", evData.Info)
 				logging.Log.Info("Connected to Slack")
 				logging.Log.Infof("Connection counter: %v", evData.ConnectionCount)
-				// Replace #general with your Channel ID
-				//rtm.SendMessage(rtm.NewOutgoingMessage("Hello world", "#general"))
 
 			case *slack.MessageEvent:
 				//logging.Log.Infof("Message: %v", evData)
@@ -161,18 +239,48 @@ monitorLoop:
 					break
 				}
 
-				logging.Log.Infof("Got a message: %s", evData.Text)
+				logging.Log.Debugf("Got a message: %s", evData.Text)
 
-				if evData.Channel != channelID {
+				if evData.Channel != channelID || evData.User == botUserID {
 					continue
 				}
 
-				logging.Log.Info("Message is on the right channel")
+				logging.Log.Debug("Message is on the right channel")
 
-				if strings.Contains(evData.Text, userTag) {
+				if evData.Text[0] == '!' {
+					logging.Log.Debug("Received an instruction")
+					tokens := strings.SplitN(evData.Text, " ", 2)
+					command := strings.ToLower(tokens[0])
+					extraText := ""
+					logging.Log.Infof("Received command %s", command)
+					if len(tokens) > 1 {
+						extraText = tokens[1]
+						logging.Log.Infof("Extra text in the command: %s", extraText)
+					}
+					funcToRun, hasCommand := commandMap[command]
+					if ! hasCommand {
+						logging.Log.Warningf("Received unknown command: %s", command)
+						errorMsg := rtm.NewOutgoingMessage("I'm sorry, that's not something I know how to do", evData.Channel)
+						rtm.SendMessage(errorMsg)
+						continue
+					}
+					logging.Log.Debugf("Running function for command <%s>", command)
+					funcToRun(extraText, evData)
+					continue
+				}
+
+				if strings.Contains(evData.Text, botUserTag) {
+					if theOperator == "" {
+						logging.Log.Info("Got operator message, but no operator is assigned")
+						notifyMsg := rtm.NewOutgoingMessage("No operator assigned", evData.Channel)
+						rtm.SendMessage(notifyMsg)
+						continue
+					}
+
 					logging.Log.Info("Attempting to notify the operator")
-					notifyMsg := rtm.NewOutgoingMessage(theOperatorTag, channelID)
+					notifyMsg := rtm.NewOutgoingMessage(theOperatorTag, evData.Channel)
 					rtm.SendMessage(notifyMsg)
+					continue
 				}
 
 
@@ -181,9 +289,11 @@ monitorLoop:
 
 			case *slack.LatencyReport:
 				logging.Log.Infof("Current latency: %v", evData.Value)
+				continue
 
 			case *slack.RTMError:
 				logging.Log.Warningf("RTM Error: %s", evData.Error())
+				continue
 
 			case *slack.InvalidAuthEvent:
 				logging.Log.Error("Invalid credentials")
@@ -196,6 +306,9 @@ monitorLoop:
 			}
 		}
 	}
+
+	leavingMsg := rtm.NewOutgoingMessage("Signing off!", channelID)
+	rtm.SendMessage(leavingMsg)
 
 	logging.Log.Info("All done!")
 
