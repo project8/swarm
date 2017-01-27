@@ -4,12 +4,28 @@ import (
 	"flag"
 	"os"
 	"strings"
-
+  "fmt"
+  "runtime"
+  "sync"
 	"github.com/nlopes/slack"
 	"github.com/spf13/viper"
 
 	"github.com/project8/swarm/Go/authentication"
 	"github.com/project8/swarm/Go/logging"
+
+	"encoding/json"
+	"io/ioutil"
+	"net/http"
+	"net/url"
+	"os"
+	"os/user"
+	"path/filepath"
+	"time"
+
+	"golang.org/x/net/context"
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/google"
+	"google.golang.org/api/calendar/v3"
 
 )
 
@@ -215,97 +231,202 @@ func main() {
 	arrivedMsg := rtm.NewOutgoingMessage("Have no fear, @operator is here!", channelID)
 	rtm.SendMessage(arrivedMsg)
 
-	logging.Log.Info("Waiting for events")
-monitorLoop:
-	for {
-		select {
-		case event, chanOpen := <-rtm.IncomingEvents:
-			if ! chanOpen {
-				logging.Log.Warning("Incoming events channel is closed")
-				break monitorLoop
-			}
-			switch evData := event.Data.(type) {
-			case *slack.HelloEvent:
-				logging.Log.Info("Slack says \"hello\"")
+	// Setting Google Calendar interfacing
 
-			case *slack.ConnectedEvent:
-				//logging.Log.Info("Infos:", evData.Info)
-				logging.Log.Info("Connected to Slack")
-				logging.Log.Infof("Connection counter: %v", evData.ConnectionCount)
-
-			case *slack.MessageEvent:
-				//logging.Log.Infof("Message: %v", evData)
-				if evData.SubType != "" {
-					break
-				}
-
-				logging.Log.Debugf("Got a message: %s", evData.Text)
-
-				if evData.Channel != channelID || evData.User == botUserID {
-					continue
-				}
-
-				logging.Log.Debug("Message is on the right channel")
-
-				if evData.Text[0] == '!' {
-					logging.Log.Debug("Received an instruction")
-					tokens := strings.SplitN(evData.Text, " ", 2)
-					command := strings.ToLower(tokens[0])
-					extraText := ""
-					logging.Log.Infof("Received command %s", command)
-					if len(tokens) > 1 {
-						extraText = tokens[1]
-						logging.Log.Infof("Extra text in the command: %s", extraText)
-					}
-					funcToRun, hasCommand := commandMap[command]
-					if ! hasCommand {
-						logging.Log.Warningf("Received unknown command: %s", command)
-						errorMsg := rtm.NewOutgoingMessage("I'm sorry, that's not something I know how to do", evData.Channel)
-						rtm.SendMessage(errorMsg)
-						continue
-					}
-					logging.Log.Debugf("Running function for command <%s>", command)
-					funcToRun(extraText, evData)
-					continue
-				}
-
-				if strings.Contains(evData.Text, botUserTag) {
-					if theOperator == "" {
-						logging.Log.Info("Got operator message, but no operator is assigned")
-						notifyMsg := rtm.NewOutgoingMessage("No operator assigned", evData.Channel)
-						rtm.SendMessage(notifyMsg)
-						continue
-					}
-
-					logging.Log.Info("Attempting to notify the operator")
-					notifyMsg := rtm.NewOutgoingMessage(theOperatorTag, evData.Channel)
-					rtm.SendMessage(notifyMsg)
-					continue
-				}
-
-
-			//case *slack.PresenceChangeEvent:
-			//	logging.Log.Infof("Presence Change: %v", evData)
-
-			case *slack.LatencyReport:
-				logging.Log.Infof("Current latency: %v", evData.Value)
-				continue
-
-			case *slack.RTMError:
-				logging.Log.Warningf("RTM Error: %s", evData.Error())
-				continue
-
-			case *slack.InvalidAuthEvent:
-				logging.Log.Error("Invalid credentials")
-				break monitorLoop
-
-			default:
-
-				// Ignore other events..
-				//logging.Log.Infof("Unexpected: %v", event.Data)
-			}
-		}
+	// getClient uses a Context and Config to retrieve a Token
+	// then generate a Client. It returns the generated Client.
+	func getClient(ctx context.Context, config *oauth2.Config) *http.Client {
+	  cacheFile, err := tokenCacheFile()
+	  if err != nil {
+	    logging.Log.Fatalf("Unable to get path to cached credential file. %v", err)
+	  }
+	  tok, err := tokenFromFile(cacheFile)
+	  if err != nil {
+	    tok = getTokenFromWeb(config)
+	    saveToken(cacheFile, tok)
+	  }
+	  return config.Client(ctx, tok)
 	}
+
+	// getTokenFromWeb uses Config to request a Token.
+	// It returns the retrieved Token.
+	func getTokenFromWeb(config *oauth2.Config) *oauth2.Token {
+	  authURL := config.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
+	  fmt.Printf("Go to the following link in your browser then type the "+
+	    "authorization code: \n%v\n", authURL)
+
+	  var code string
+	  if _, err := fmt.Scan(&code); err != nil {
+	    logging.Log.Fatalf("Unable to read authorization code %v", err)
+	  }
+
+	  tok, err := config.Exchange(oauth2.NoContext, code)
+	  if err != nil {
+	    logging.Log.Fatalf("Unable to retrieve token from web %v", err)
+	  }
+	  return tok
+	}
+
+	// tokenCacheFile generates credential file path/filename.
+	// It returns the generated credential path/filename.
+	func tokenCacheFile() (string, error) {
+	  usr, err := user.Current()
+	  if err != nil {
+	    return "", err
+	  }
+	  tokenCacheDir := filepath.Join(usr.HomeDir, ".credentials")
+	  os.MkdirAll(tokenCacheDir, 0700)
+	  return filepath.Join(tokenCacheDir,
+	    url.QueryEscape("calendar-go-quickstart.json")), err
+	}
+
+	// tokenFromFile retrieves a Token from a given file path.
+	// It returns the retrieved Token and any read error encountered.
+	func tokenFromFile(file string) (*oauth2.Token, error) {
+	  f, err := os.Open(file)
+	  if err != nil {
+	    return nil, err
+	  }
+	  t := &oauth2.Token{}
+	  err = json.NewDecoder(f).Decode(t)
+	  defer f.Close()
+	  return t, err
+	}
+
+	// saveToken uses a file path to create a file and store the
+	// token in it.
+	func saveToken(file string, token *oauth2.Token) {
+	  fmt.Printf("Saving credential file to: %s\n", file)
+	  f, err := os.Create(file)
+	  if err != nil {
+	    logging.Log.Fatalf("Unable to cache oauth token: %v", err)
+	  }
+	  defer f.Close()
+	  json.NewEncoder(f).Encode(token)
+	}
+
+// Setting the Multithreading
+	runtime.GOMAXPROCS(2)
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	fmt.Println("Starting Go Routines")
+
+// Starting the two loops
+	go func() {
+			defer wg.Done()
+
+			for number := 1; number < 27; number++ {
+					fmt.Printf("a%d ", number)
+			}
+			monitorLoop:
+				for {
+					select {
+					case event, chanOpen := <-rtm.IncomingEvents:
+						if ! chanOpen {
+							logging.Log.Warning("Incoming events channel is closed")
+							break monitorLoop
+						}
+						switch evData := event.Data.(type) {
+						case *slack.HelloEvent:
+							logging.Log.Info("Slack says \"hello\"")
+
+						case *slack.ConnectedEvent:
+							//logging.Log.Info("Infos:", evData.Info)
+							logging.Log.Info("Connected to Slack")
+							logging.Log.Infof("Connection counter: %v", evData.ConnectionCount)
+
+						case *slack.MessageEvent:
+							//logging.Log.Infof("Message: %v", evData)
+							if evData.SubType != "" {
+								break
+							}
+
+							logging.Log.Debugf("Got a message: %s", evData.Text)
+
+							if evData.Channel != channelID || evData.User == botUserID {
+								continue
+							}
+
+							logging.Log.Debug("Message is on the right channel")
+
+							if evData.Text[0] == '!' {
+								logging.Log.Debug("Received an instruction")
+								tokens := strings.SplitN(evData.Text, " ", 2)
+								command := strings.ToLower(tokens[0])
+								extraText := ""
+								logging.Log.Infof("Received command %s", command)
+								if len(tokens) > 1 {
+									extraText = tokens[1]
+									logging.Log.Infof("Extra text in the command: %s", extraText)
+								}
+								funcToRun, hasCommand := commandMap[command]
+								if ! hasCommand {
+									logging.Log.Warningf("Received unknown command: %s", command)
+									errorMsg := rtm.NewOutgoingMessage("I'm sorry, that's not something I know how to do", evData.Channel)
+									rtm.SendMessage(errorMsg)
+									continue
+								}
+								logging.Log.Debugf("Running function for command <%s>", command)
+								funcToRun(extraText, evData)
+								continue
+							}
+
+							if strings.Contains(evData.Text, botUserTag) {
+								if theOperator == "" {
+									logging.Log.Info("Got operator message, but no operator is assigned")
+									notifyMsg := rtm.NewOutgoingMessage("No operator assigned", evData.Channel)
+									rtm.SendMessage(notifyMsg)
+									continue
+								}
+
+								logging.Log.Info("Attempting to notify the operator")
+								notifyMsg := rtm.NewOutgoingMessage(theOperatorTag, evData.Channel)
+								rtm.SendMessage(notifyMsg)
+								continue
+							}
+
+						//case *slack.PresenceChangeEvent:
+						//	logging.Log.Infof("Presence Change: %v", evData)
+
+						case *slack.LatencyReport:
+							logging.Log.Infof("Current latency: %v", evData.Value)
+							continue
+
+						case *slack.RTMError:
+							logging.Log.Warningf("RTM Error: %s", evData.Error())
+							continue
+
+						case *slack.InvalidAuthEvent:
+							logging.Log.Error("Invalid credentials")
+							break monitorLoop
+
+						default:
+
+							// Ignore other events..
+							//logging.Log.Infof("Unexpected: %v", event.Data)
+						}
+					}
+				}
+	}()
+
+	go func() {
+			defer wg.Done()
+
+			for number := 1; number < 270000; number++ {
+					fmt.Printf("b%d ", number)
+			}
+	}()
+
+	fmt.Println("Waiting To Finish")
+	wg.Wait()
+
+	fmt.Println("\nTerminating Program")
+
+
+	logging.Log.Info("Waiting for events")
+
 
 	leavingMsg := rtm.NewOutgoingMessage("Signing off!", channelID)
 	rtm.SendMessage(leavingMsg)
