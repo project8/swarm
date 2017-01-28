@@ -3,12 +3,15 @@ package main
 import (
 	"flag"
 	"os"
+	"os/user"
 	"strings"
   "fmt"
   "runtime"
   "sync"
 	"github.com/nlopes/slack"
 	"github.com/spf13/viper"
+	"bytes"
+	"strconv"
 
 	"github.com/project8/swarm/Go/authentication"
 	"github.com/project8/swarm/Go/logging"
@@ -17,8 +20,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"os"
-	"os/user"
 	"path/filepath"
 	"time"
 
@@ -34,6 +35,82 @@ var monitorStarted bool = false
 
 func getOperatorTag(operator string) (string) {
 	return "(<@" + operator + ">)"
+}
+
+	// Setting Google Calendar interfacing
+
+	// getClient uses a Context and Config to retrieve a Token
+	// then generate a Client. It returns the generated Client.
+
+
+func getClient(ctx context.Context, config *oauth2.Config) *http.Client {
+	cacheFile, err := tokenCacheFile()
+	if err != nil {
+		logging.Log.Fatalf("Unable to get path to cached credential file. %v", err)
+	}
+	tok, err := tokenFromFile(cacheFile)
+	if err != nil {
+		tok = getTokenFromWeb(config)
+		saveToken(cacheFile, tok)
+	}
+	return config.Client(ctx, tok)
+}
+
+// getTokenFromWeb uses Config to request a Token.
+// It returns the retrieved Token.
+func getTokenFromWeb(config *oauth2.Config) *oauth2.Token {
+	authURL := config.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
+	fmt.Printf("Go to the following link in your browser then type the "+
+		"authorization code: \n%v\n", authURL)
+
+	var code string
+	if _, err := fmt.Scan(&code); err != nil {
+		logging.Log.Fatalf("Unable to read authorization code %v", err)
+	}
+
+	tok, err := config.Exchange(oauth2.NoContext, code)
+	if err != nil {
+		logging.Log.Fatalf("Unable to retrieve token from web %v", err)
+	}
+	return tok
+}
+
+// tokenCacheFile generates credential file path/filename.
+// It returns the generated credential path/filename.
+func tokenCacheFile() (string, error) {
+	usr, err := user.Current()
+	if err != nil {
+		return "", err
+	}
+	tokenCacheDir := filepath.Join(usr.HomeDir, ".credentials")
+	os.MkdirAll(tokenCacheDir, 0700)
+	return filepath.Join(tokenCacheDir,
+		url.QueryEscape("calendar-go-quickstart.json")), err
+}
+
+// tokenFromFile retrieves a Token from a given file path.
+// It returns the retrieved Token and any read error encountered.
+func tokenFromFile(file string) (*oauth2.Token, error) {
+	f, err := os.Open(file)
+	if err != nil {
+		return nil, err
+	}
+	t := &oauth2.Token{}
+	err = json.NewDecoder(f).Decode(t)
+	defer f.Close()
+	return t, err
+}
+
+// saveToken uses a file path to create a file and store the
+// token in it.
+func saveToken(file string, token *oauth2.Token) {
+	fmt.Printf("Saving credential file to: %s\n", file)
+	f, err := os.Create(file)
+	if err != nil {
+		logging.Log.Fatalf("Unable to cache oauth token: %v", err)
+	}
+	defer f.Close()
+	json.NewEncoder(f).Encode(token)
 }
 
 func main() {
@@ -231,79 +308,33 @@ func main() {
 	arrivedMsg := rtm.NewOutgoingMessage("Have no fear, @operator is here!", channelID)
 	rtm.SendMessage(arrivedMsg)
 
-	// Setting Google Calendar interfacing
 
-	// getClient uses a Context and Config to retrieve a Token
-	// then generate a Client. It returns the generated Client.
-	func getClient(ctx context.Context, config *oauth2.Config) *http.Client {
-	  cacheFile, err := tokenCacheFile()
+	// Google Calendar starts here
+	ctx := context.Background()
+		usr, usrErr := user.Current()
+		if usrErr != nil {
+				logging.Log.Fatalf("error")
+		return
+		}
+		CalAuthPath:=filepath.Join(usr.HomeDir, "client_secret.json")
+	  b, err := ioutil.ReadFile(CalAuthPath)
 	  if err != nil {
-	    logging.Log.Fatalf("Unable to get path to cached credential file. %v", err)
+	    logging.Log.Fatalf("Unable to read client secret file: %v", err)
 	  }
-	  tok, err := tokenFromFile(cacheFile)
+
+	  // If modifying these scopes, delete your previously saved credentials
+	  // at ~/.credentials/calendar-go-quickstart.json
+	  config, err := google.ConfigFromJSON(b, calendar.CalendarReadonlyScope)
 	  if err != nil {
-	    tok = getTokenFromWeb(config)
-	    saveToken(cacheFile, tok)
+	    logging.Log.Fatalf("Unable to parse client secret file to config: %v", err)
 	  }
-	  return config.Client(ctx, tok)
-	}
+	  client := getClient(ctx, config)
 
-	// getTokenFromWeb uses Config to request a Token.
-	// It returns the retrieved Token.
-	func getTokenFromWeb(config *oauth2.Config) *oauth2.Token {
-	  authURL := config.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
-	  fmt.Printf("Go to the following link in your browser then type the "+
-	    "authorization code: \n%v\n", authURL)
-
-	  var code string
-	  if _, err := fmt.Scan(&code); err != nil {
-	    logging.Log.Fatalf("Unable to read authorization code %v", err)
-	  }
-
-	  tok, err := config.Exchange(oauth2.NoContext, code)
+	  srv, err := calendar.New(client)
 	  if err != nil {
-	    logging.Log.Fatalf("Unable to retrieve token from web %v", err)
+	    logging.Log.Fatalf("Unable to retrieve calendar Client %v", err)
 	  }
-	  return tok
-	}
 
-	// tokenCacheFile generates credential file path/filename.
-	// It returns the generated credential path/filename.
-	func tokenCacheFile() (string, error) {
-	  usr, err := user.Current()
-	  if err != nil {
-	    return "", err
-	  }
-	  tokenCacheDir := filepath.Join(usr.HomeDir, ".credentials")
-	  os.MkdirAll(tokenCacheDir, 0700)
-	  return filepath.Join(tokenCacheDir,
-	    url.QueryEscape("calendar-go-quickstart.json")), err
-	}
-
-	// tokenFromFile retrieves a Token from a given file path.
-	// It returns the retrieved Token and any read error encountered.
-	func tokenFromFile(file string) (*oauth2.Token, error) {
-	  f, err := os.Open(file)
-	  if err != nil {
-	    return nil, err
-	  }
-	  t := &oauth2.Token{}
-	  err = json.NewDecoder(f).Decode(t)
-	  defer f.Close()
-	  return t, err
-	}
-
-	// saveToken uses a file path to create a file and store the
-	// token in it.
-	func saveToken(file string, token *oauth2.Token) {
-	  fmt.Printf("Saving credential file to: %s\n", file)
-	  f, err := os.Create(file)
-	  if err != nil {
-	    logging.Log.Fatalf("Unable to cache oauth token: %v", err)
-	  }
-	  defer f.Close()
-	  json.NewEncoder(f).Encode(token)
-	}
 
 // Setting the Multithreading
 	runtime.GOMAXPROCS(2)
@@ -313,6 +344,7 @@ func main() {
 
 	fmt.Println("Starting Go Routines")
 
+	temp :=0
 // Starting the two loops
 	go func() {
 			defer wg.Done()
@@ -411,12 +443,56 @@ func main() {
 				}
 	}()
 
+
 	go func() {
 			defer wg.Done()
 
-			for number := 1; number < 270000; number++ {
-					fmt.Printf("b%d ", number)
+			for number := 1; number < 200; number++ {
+
+						t := time.Now().Format(time.RFC3339)
+						events, err := srv.Events.List("primary").ShowDeleted(false).
+							SingleEvents(true).TimeMin(t).MaxResults(100).OrderBy("startTime").Do()
+						if err != nil {
+							logging.Log.Fatalf("Unable to retrieve next ten of the user's events. %v", err)
+						}
+						// var buffer bytes.Buffer
+						// buffer.WriteString("Found ")
+						// buffer.WriteString(strconv.FormatInt(int64(len(events.Items)),10))
+						// buffer.WriteString(" events in the Calendar")
+						//
+						// errorMsg := rtm.NewOutgoingMessage(buffer.String(), channelID)
+						// rtm.SendMessage(errorMsg)
+
+						fmt.Println("Upcoming events:")
+						if len(events.Items) > 0 {
+							for _, i := range events.Items {
+								var whenStart string
+								var whenEnd string
+								// If the DateTime is an empty string the Event is an all-day Event.
+								// So only Date is available.
+
+								if strings.Contains(i.Summary,"Operator:") {
+									fmt.Printf("%s (%s -- %s)\n", i.Summary, whenStart, whenEnd)
+									errorMsg := rtm.NewOutgoingMessage("Found the operator", channelID)
+									rtm.SendMessage(errorMsg)
+									if i.Start.DateTime != "" {
+										whenStart = i.Start.DateTime
+									} else {
+										whenStart = i.Start.Date
+									}
+									if i.End.DateTime != "" {
+										whenEnd = i.End.DateTime
+									} else {
+										whenEnd = i.End.Date
+									}
+
+								}
+							}
+						} else {
+							fmt.Printf("No upcoming events found.\n")
+						}
 			}
+			time.Sleep(10*time.Second)
 	}()
 
 	fmt.Println("Waiting To Finish")
