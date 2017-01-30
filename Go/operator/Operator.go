@@ -10,8 +10,6 @@ import (
   "sync"
 	"github.com/nlopes/slack"
 	"github.com/spf13/viper"
-	"bytes"
-	"strconv"
 
 	"github.com/project8/swarm/Go/authentication"
 	"github.com/project8/swarm/Go/logging"
@@ -36,7 +34,9 @@ var monitorStarted bool = false
 func getOperatorTag(operator string) (string) {
 	return "(<@" + operator + ">)"
 }
-
+func inTimeSpan(start, end, check time.Time) bool {
+    return check.After(start) && check.Before(end)
+}
 	// Setting Google Calendar interfacing
 
 	// getClient uses a Context and Config to retrieve a Token
@@ -462,8 +462,8 @@ func main() {
 						//
 						// errorMsg := rtm.NewOutgoingMessage(buffer.String(), channelID)
 						// rtm.SendMessage(errorMsg)
-
-						fmt.Println("Upcoming events:")
+						layout := "2006-01-02"
+						logging.Log.Infof("Upcoming events:")
 						if len(events.Items) > 0 {
 							for _, i := range events.Items {
 								var whenStart string
@@ -472,7 +472,7 @@ func main() {
 								// So only Date is available.
 
 								if strings.Contains(i.Summary,"Operator:") {
-									fmt.Printf("%s (%s -- %s)\n", i.Summary, whenStart, whenEnd)
+									logging.Log.Infof("%s (%s -- %s)\n", i.Summary, whenStart, whenEnd)
 									errorMsg := rtm.NewOutgoingMessage("Found the operator", channelID)
 									rtm.SendMessage(errorMsg)
 									if i.Start.DateTime != "" {
@@ -485,14 +485,20 @@ func main() {
 									} else {
 										whenEnd = i.End.Date
 									}
+									extractedTime, err := time.Parse(layout, str)
+
+									if inTimeSpan(whenStart, whenEnd, t) {
+        						logging.Log.Debugf(t, "is between", whenStart, "and", whenEnd, ".")
+										logging.Log.Infof(input[len("Operator: "):]," is the operator.")
+    							}
 
 								}
 							}
 						} else {
 							fmt.Printf("No upcoming events found.\n")
 						}
+						time.Sleep(10*time.Second)
 			}
-			time.Sleep(10*time.Second)
 	}()
 
 	fmt.Println("Waiting To Finish")
