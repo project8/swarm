@@ -132,8 +132,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Information about the operator and temporary operators
 	theOperator := ""
 	theOperatorTag := ""
+	var tempOperators map[string]string
+	tempOperators = make(map[string]string)
 
 	logging.Log.Info("Connecting to RTM")
 	rtm := api.NewRTM()
@@ -161,7 +164,9 @@ func main() {
 			"\t`!help`: display this help message\n" +
 			"\t`!startshift`: manually start your shift, replacing the existing operator\n" +
 			"\t`!endshift`: remove yourself as the operator\n" +
-			"\t`!overrideshift [username (optional)]`: replace the current operator with a manually-specified operator; if no operator is specified, the current operator will be removed"
+			"\t`!overrideshift [username (optional)]`: replace the current operator with a manually-specified operator; if no operator is specified, the current operator will be removed\n" +
+			"\t`!tempoperator [username (optional)]`: add yourself or someone else as a temporary operator; leave the username blank to add yourself\n" +
+			"\t`!removetempoperator [username (optional)]`: remove yourself or someone else as temporary operator; leave the username blank to remove yourself"
 			logging.Log.Debug("Printing help message")
 			helpMsg := rtm.NewOutgoingMessage(msgText, msg.Channel)
 			rtm.SendMessage(helpMsg)
@@ -209,6 +214,53 @@ func main() {
 			osMessage := rtm.NewOutgoingMessage("Operator has been removed", msg.Channel)
 			rtm.SendMessage(osMessage)
 		}
+		return
+	}
+	commandMap["!tempoperator"] = func(username string, msg *slack.MessageEvent) {
+		if username != "" {
+			logging.Log.Info("Adding as temporary operator user " + username)
+			newUserID, hasID := userNameMap[username]
+			if ! hasID {
+				logging.Log.Warningf("Unknown username: %s", username)
+				osMessage := rtm.NewOutgoingMessage("I'm sorry, I don't recognize that username", msg.Channel)
+				rtm.SendMessage(osMessage)
+				return
+			}
+			tempOperators[newUserID] = getOperatorTag(newUserID)
+			osMessage := rtm.NewOutgoingMessage("Happy operating, " + userIDMap[newUserID] + "!", msg.Channel)
+			rtm.SendMessage(osMessage)
+		} else {
+			logging.Log.Info("Adding as temporary operator user " + userIDMap[msg.User])
+			tempOperators[msg.User] = getOperatorTag(msg.User)
+			ssMessage := rtm.NewOutgoingMessage("User your powers wisely, " + userIDMap[msg.User] + "!", msg.Channel)
+			rtm.SendMessage(ssMessage)
+		}
+	}
+	commandMap["!removetempoperator"] = func(username string, msg *slack.MessageEvent) {
+		toRemove := msg.User
+		if username != "" {
+			logging.Log.Info("Removing from temporary operators user " + username)
+			toRemoveID, hasID := userNameMap[username]
+			if ! hasID {
+				logging.Log.Warningf("Unknown username: %s", username)
+				osMessage := rtm.NewOutgoingMessage("I'm sorry, I don't recognize that username", msg.Channel)
+				rtm.SendMessage(osMessage)
+				return
+			}
+			toRemove = toRemoveID
+		}
+
+		_, isTempOp := tempOperators[toRemove]
+		if ! isTempOp {
+			logging.Log.Debug("Received remove-temp-operator instruction from non-temp-operator")
+			usMessage := rtm.NewOutgoingMessage(userIDMap[toRemove] + " is not currently listed as a temporary operator", msg.Channel)
+			rtm.SendMessage(usMessage)
+			return
+		}
+		logging.Log.Info("Removing temporary operator " + userIDMap[toRemove])
+		delete(tempOperators, toRemove)
+		usMessage := rtm.NewOutgoingMessage("OK, you're all done, thanks!", msg.Channel)
+		rtm.SendMessage(usMessage)
 		return
 	}
 
@@ -270,7 +322,7 @@ monitorLoop:
 				}
 
 				if strings.Contains(evData.Text, botUserTag) {
-					if theOperator == "" {
+					if theOperator == "" && len(tempOperators) == 0 {
 						logging.Log.Info("Got operator message, but no operator is assigned")
 						notifyMsg := rtm.NewOutgoingMessage("No operator assigned", evData.Channel)
 						rtm.SendMessage(notifyMsg)
@@ -278,7 +330,11 @@ monitorLoop:
 					}
 
 					logging.Log.Info("Attempting to notify the operator")
-					notifyMsg := rtm.NewOutgoingMessage(theOperatorTag, evData.Channel)
+					notification := theOperatorTag
+					for _, tag := range tempOperators {
+						notification += " " + tag
+					}
+					notifyMsg := rtm.NewOutgoingMessage(notification, evData.Channel)
 					rtm.SendMessage(notifyMsg)
 					continue
 				}
