@@ -162,6 +162,7 @@ func main() {
 			"If you enter a command, I can take certain actions:\n" +
 			"\t`!hello`: say hi\n" +
 			"\t`!help`: display this help message\n" +
+			"\t`!whoisop`: show who the current operator is, plus any temporary operators\n" +
 			"\t`!startshift`: manually start your shift, replacing the existing operator\n" +
 			"\t`!endshift`: remove yourself as the operator\n" +
 			"\t`!overrideshift [username (optional)]`: replace the current operator with a manually-specified operator; if no operator is specified, the current operator will be removed\n" +
@@ -170,6 +171,26 @@ func main() {
 			logging.Log.Debug("Printing help message")
 			helpMsg := rtm.NewOutgoingMessage(msgText, msg.Channel)
 			rtm.SendMessage(helpMsg)
+	}
+	commandMap["!whoisop"] = func(_ string, msg *slack.MessageEvent) {
+		if theOperator == "" && len(tempOperators) == 0 {
+			wioMessage := rtm.NewOutgoingMessage("There is no operator assigned right now", msg.Channel)
+			rtm.SendMessage(wioMessage)
+			return
+		}
+		var msgText string
+		if theOperator != "" {
+			msgText += "The operator is " + userIDMap[theOperator] + ".  "
+		}
+		if len(tempOperators) != 0 {
+			msgText += "Temporary operators: "
+			for userID, _ := range tempOperators {
+				msgText += userIDMap[userID] + " "
+			}
+		}
+		wioMessage := rtm.NewOutgoingMessage(msgText, msg.Channel)
+		rtm.SendMessage(wioMessage)
+		return
 	}
 	commandMap["!startshift"] = func(_ string, msg *slack.MessageEvent) {
 		logging.Log.Info("Shift starting for user " + userIDMap[msg.User])
