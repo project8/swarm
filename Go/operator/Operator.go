@@ -248,19 +248,19 @@ func main() {
 				return
 			}
 			tempOperators[newUserID] = getOperatorTag(newUserID)
-			osMessage := rtm.NewOutgoingMessage("Happy operating, " + userIDMap[newUserID] + "!", msg.Channel)
+			osMessage := rtm.NewOutgoingMessage("Use your powers wisely, " + userIDMap[newUserID] + "!", msg.Channel)
 			rtm.SendMessage(osMessage)
 		} else {
 			logging.Log.Info("Adding as temporary operator user " + userIDMap[msg.User])
 			tempOperators[msg.User] = getOperatorTag(msg.User)
-			ssMessage := rtm.NewOutgoingMessage("User your powers wisely, " + userIDMap[msg.User] + "!", msg.Channel)
+			ssMessage := rtm.NewOutgoingMessage("Use your powers wisely, " + userIDMap[msg.User] + "!", msg.Channel)
 			rtm.SendMessage(ssMessage)
 		}
 	}
 	commandMap["!removetempoperator"] = func(username string, msg *slack.MessageEvent) {
 		toRemove := msg.User
 		if username != "" {
-			logging.Log.Info("Removing from temporary operators user " + username)
+			logging.Log.Info("Removing " + username + " from temporary operatorship")
 			toRemoveID, hasID := userNameMap[username]
 			if ! hasID {
 				logging.Log.Warningf("Unknown username: %s", username)
