@@ -511,8 +511,6 @@ func main() {
 
 							// Ignore other events..
 							//logging.Log.Infof("Unexpected: %v", event.Data)
-						}
-					}
 				if strings.Contains(evData.Text, botUserTag) {
 					if theOperator == "" && len(tempOperators) == 0 {
 						logging.Log.Info("Got operator message, but no operator is assigned")
@@ -530,7 +528,10 @@ func main() {
 					rtm.SendMessage(notifyMsg)
 					continue
 				}
-	}()
+			}
+		}
+	}
+}()
 
 
 	go func() {
