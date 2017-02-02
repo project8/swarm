@@ -3,5 +3,10 @@
 
 	"username": "operator",
 
-	"channel": "test_operator"
+	"channel": "test_operator",
+
+	"usercorrespondance":
+						{"Christine Claessens": "cclaessens",
+						 "Noah Oblath": "nsoblath",
+					   "Mathieu Guigue": "guigue"}
 }

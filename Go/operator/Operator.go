@@ -8,6 +8,7 @@ import (
   "fmt"
   "runtime"
   "sync"
+	"strconv"
 	"github.com/nlopes/slack"
 	"github.com/spf13/viper"
 
@@ -417,14 +418,11 @@ func main() {
 
 	fmt.Println("Starting Go Routines")
 
-	temp :=0
+	// temp :=0
 // Starting the two loops
 	go func() {
 			defer wg.Done()
-
-			for number := 1; number < 27; number++ {
-					fmt.Printf("a%d ", number)
-			}
+			logging.Log.Infof("Starting MonitorLoop")
 			monitorLoop:
 				for {
 					select {
@@ -491,6 +489,23 @@ func main() {
 								rtm.SendMessage(notifyMsg)
 								continue
 							}
+							if strings.Contains(evData.Text, botUserTag) {
+								if theOperator == "" && len(tempOperators) == 0 {
+									logging.Log.Info("Got operator message, but no operator is assigned")
+									notifyMsg := rtm.NewOutgoingMessage("No operator assigned", evData.Channel)
+									rtm.SendMessage(notifyMsg)
+									continue
+								}
+
+								logging.Log.Info("Attempting to notify the operator")
+								notification := theOperatorTag
+								for _, tag := range tempOperators {
+									notification += " " + tag
+								}
+								notifyMsg := rtm.NewOutgoingMessage(notification, evData.Channel)
+								rtm.SendMessage(notifyMsg)
+								continue
+							}
 
 						//case *slack.PresenceChangeEvent:
 						//	logging.Log.Infof("Presence Change: %v", evData)
@@ -511,23 +526,7 @@ func main() {
 
 							// Ignore other events..
 							//logging.Log.Infof("Unexpected: %v", event.Data)
-				if strings.Contains(evData.Text, botUserTag) {
-					if theOperator == "" && len(tempOperators) == 0 {
-						logging.Log.Info("Got operator message, but no operator is assigned")
-						notifyMsg := rtm.NewOutgoingMessage("No operator assigned", evData.Channel)
-						rtm.SendMessage(notifyMsg)
-						continue
-					}
 
-					logging.Log.Info("Attempting to notify the operator")
-					notification := theOperatorTag
-					for _, tag := range tempOperators {
-						notification += " " + tag
-					}
-					notifyMsg := rtm.NewOutgoingMessage(notification, evData.Channel)
-					rtm.SendMessage(notifyMsg)
-					continue
-				}
 			}
 		}
 	}
@@ -537,7 +536,10 @@ func main() {
 	go func() {
 			defer wg.Done()
 
-			for number := 1; number < 200; number++ {
+			initMessageSent:= false
+			// proutLoop:
+			logging.Log.Infof("Starting GCal loop")
+			for  {
 
 						t := time.Now().Format(time.RFC3339)
 						events, err := srv.Events.List("primary").ShowDeleted(false).
@@ -545,6 +547,7 @@ func main() {
 						if err != nil {
 							logging.Log.Fatalf("Unable to retrieve next ten of the user's events. %v", err)
 						}
+						logging.Log.Infof("Found "+ strconv.Itoa(len(events.Items))+" events in the Google Calendar." )
 						// var buffer bytes.Buffer
 						// buffer.WriteString("Found ")
 						// buffer.WriteString(strconv.FormatInt(int64(len(events.Items)),10))
@@ -552,8 +555,8 @@ func main() {
 						//
 						// errorMsg := rtm.NewOutgoingMessage(buffer.String(), channelID)
 						// rtm.SendMessage(errorMsg)
-						layout := "2006-01-02"
-						logging.Log.Infof("Upcoming events:")
+						// layout := "2006-01-02"
+						// logging.Log.Infof("Upcoming events:")
 						if len(events.Items) > 0 {
 							for _, i := range events.Items {
 								var whenStart string
@@ -562,9 +565,7 @@ func main() {
 								// So only Date is available.
 
 								if strings.Contains(i.Summary,"Operator:") {
-									logging.Log.Infof("%s (%s -- %s)\n", i.Summary, whenStart, whenEnd)
-									errorMsg := rtm.NewOutgoingMessage("Found the operator", channelID)
-									rtm.SendMessage(errorMsg)
+
 									if i.Start.DateTime != "" {
 										whenStart = i.Start.DateTime
 									} else {
@@ -575,15 +576,43 @@ func main() {
 									} else {
 										whenEnd = i.End.Date
 									}
-									extractedTime, err := time.Parse(layout, str)
+									const shortForm = "2006-01-02"
+									whenStartTime, _ := time.Parse(shortForm, whenStart)
+									whenStartTime = whenStartTime.Add(time.Hour*time.Duration(9))
+									whenEndTime, _ := time.Parse(shortForm, whenEnd)
+									whenEndTime = whenEndTime.Add(time.Hour*time.Duration(9))
+									// fmt.Println(whenStartTime,whenEndTime)
+									operatorName:=strings.Replace(i.Summary,"Operator: ","",-1)
+									print(userIDMap[theOperator] + "   " + operatorName+"\n")
+									if inTimeSpan(whenStartTime,whenEndTime,time.Now()) {
+										if !initMessageSent{
+											msgToSend:= "Found the current operator: " + operatorName + " (shift period: " + whenStart + ":9AM--"+ whenEnd + ":9AM)"
+											logging.Log.Infof(msgToSend)
+											logging.Log.Debug("Sending above message to Slack")
+											slackMsg := rtm.NewOutgoingMessage(msgToSend, channelID)
+											rtm.SendMessage(slackMsg)
+											initMessageSent=true
+										} else {
+											msgToSend:= "Initial message already sent"
+											logging.Log.Infof(msgToSend)
+										}
+										// print(theOperator,operatorName)
 
-									if inTimeSpan(whenStart, whenEnd, t) {
-        						logging.Log.Debugf(t, "is between", whenStart, "and", whenEnd, ".")
-										logging.Log.Infof(input[len("Operator: "):]," is the operator.")
-    							}
+									} else {
+											msgToSend:= operatorName + "is not the current operator"
+											logging.Log.Infof(msgToSend)
+									}
+
 
 								}
-							}
+									// extractedTime, err := time.Parse(layout, str)
+									//
+									// if inTimeSpan(whenStart, whenEnd, t) {
+        					// 	logging.Log.Debugf(t, "is between", whenStart, "and", whenEnd, ".")
+									// 	logging.Log.Infof(input[len("Operator: "):]," is the operator.")
+    							// }
+
+								}
 						} else {
 							fmt.Printf("No upcoming events found.\n")
 						}
@@ -591,10 +620,10 @@ func main() {
 			}
 	}()
 
-	fmt.Println("Waiting To Finish")
+	logging.Log.Info("Waiting To Finish")
 	wg.Wait()
 
-	fmt.Println("\nTerminating Program")
+	logging.Log.Info("\nTerminating Program")
 
 
 	logging.Log.Info("Waiting for events")
