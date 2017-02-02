@@ -7,6 +7,7 @@
 * **diopsid** -- Monitors disk usage and sends dripline alerts
 * **dungbeetle** -- Cleans up empty folders
 * **mdreceiver** -- Receives data via dripline and saves JSON files
+* **operator** -- Slack bot to handle operator requests and other commands
 * **SlackMonitor** -- Cleans channel histories and maintains history size limits
 
 ### Packages
