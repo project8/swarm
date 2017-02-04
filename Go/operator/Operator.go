@@ -205,8 +205,10 @@ func main() {
 
 	// make a map from user ID to name, and a map from user name to ID
 	var userIDMap map[string]string
+	var userRealNameMap map[string]string
 	var userNameMap map[string]string
 	userIDMap = make(map[string]string)
+	userRealNameMap = make(map[string]string)
 	userNameMap = make(map[string]string)
 	botUserID := ""
 	users, usersErr := api.GetUsers()
@@ -215,8 +217,10 @@ func main() {
 		os.Exit(1)
 	} else {
 		for _, user := range users {
+			print(user.Name+"\t"+user.ID+"\t"+user.RealName+"\n")
 			userIDMap[user.ID] = user.Name
 			userNameMap[user.Name] = user.ID
+			userRealNameMap[user.RealName] = user.ID
 			if user.Name == botUserName {
 				botUserID = user.ID
 			}
@@ -628,7 +632,7 @@ gCalLoop:
 							whenEndTime = whenEndTime.Add(time.Hour*time.Duration(9))
 							// fmt.Println(whenStartTime,whenEndTime)
 							operatorName:=strings.Replace(i.Summary,"Operator: ","",-1)
-							print(userIDMap[theOperator] + "   " + operatorName+"\n")
+							print(userRealNameMap["operatorName"] + "   " + operatorName+"\n")
 							if inTimeSpan(whenStartTime,whenEndTime,time.Now()) {
 								if !initMessageSent{
 									msgToSend:= "Found the current operator: " + operatorName + " (shift period: " + whenStart + ":9AM--"+ whenEnd + ":9AM)"
