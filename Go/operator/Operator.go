@@ -20,7 +20,6 @@ import (
 	"github.com/project8/swarm/Go/logging"
 
 	"encoding/json"
-	//"io/ioutil"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -255,21 +254,7 @@ func main() {
 	var tempOperators map[string]string
 	tempOperators = make(map[string]string)
 
-/*
-	// Google Calendar starts here
-	ctx := context.Background()
-	usr, usrErr := user.Current()
-	if usrErr != nil {
-		logging.Log.Fatalf("error")
-		return
-	}
-	CalAuthPath:=filepath.Join(usr.HomeDir, "client_secret.json")
-	authData, calAuthErr := ioutil.ReadFile(CalAuthPath)
-	if calAuthErr != nil {
-		logging.Log.Fatalf("Unable to read client secret file: %v", calAuthErr)
-		return
-	}
-*/
+	// Google authentication
 	ctx := context.Background()
 
 	// If modifying these scopes, delete your previously saved credentials
