@@ -1,14 +1,18 @@
 package main
 
 import (
+	"fmt"
 	"flag"
 	"os"
+	"os/signal"
 	"os/user"
-	"strings"
-  "fmt"
-  "runtime"
-  "sync"
+	"runtime"
 	"strconv"
+	"strings"
+	"sync"
+	"syscall"
+	"time"
+
 	"github.com/nlopes/slack"
 	"github.com/spf13/viper"
 
@@ -16,11 +20,10 @@ import (
 	"github.com/project8/swarm/Go/logging"
 
 	"encoding/json"
-	"io/ioutil"
+	//"io/ioutil"
 	"net/http"
 	"net/url"
 	"path/filepath"
-	"time"
 
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2"
@@ -30,6 +33,21 @@ import (
 )
 
 var monitorStarted bool = false
+
+// A ControlMessage is sent between the main thread and the sub-threads
+// to indicate system events (such as termination) that must be handled.
+type ControlMessage uint
+
+const (
+	// StopExecution asks the threads to finish what they are doing
+	// and return gracefully.
+	StopExecution = 0
+
+	// ThreadCannotContinue signals that the sending thread cannot continue
+	// executing due to an error, and hornet should shut down.
+	ThreadCannotContinue = 1
+)
+
 
 
 func getOperatorTag(operator string) (string) {
@@ -158,7 +176,7 @@ func main() {
 
 	channelName := viper.GetString("channel")
 
-	// check authentication for desired username
+	// check Authentications
 	if authErr := authentication.Load(); authErr != nil {
 		logging.Log.Criticalf("Error in loading authenticators: %v", authErr)
 		os.Exit(1)
@@ -171,7 +189,12 @@ func main() {
 	authToken := authentication.SlackToken(botUserName)
 
 	logging.Log.Infof("Slack username: %s", botUserName)
-	logging.Log.Infof("Slack token: %s", authToken)
+	logging.Log.Debugf("Slack token: %s", authToken)
+
+	if ! authentication.GoogleAvailable() {
+		logging.Log.Critical("Authentication for Google is not available")
+		os.Exit(1)
+	}
 
 	// get the slack API object
 	api := slack.New(authToken)
@@ -232,6 +255,41 @@ func main() {
 	var tempOperators map[string]string
 	tempOperators = make(map[string]string)
 
+/*
+	// Google Calendar starts here
+	ctx := context.Background()
+	usr, usrErr := user.Current()
+	if usrErr != nil {
+		logging.Log.Fatalf("error")
+		return
+	}
+	CalAuthPath:=filepath.Join(usr.HomeDir, "client_secret.json")
+	authData, calAuthErr := ioutil.ReadFile(CalAuthPath)
+	if calAuthErr != nil {
+		logging.Log.Fatalf("Unable to read client secret file: %v", calAuthErr)
+		return
+	}
+*/
+	ctx := context.Background()
+
+	// If modifying these scopes, delete your previously saved credentials
+	// at ~/.credentials/calendar-go-quickstart.json
+	config, gConfigErr := google.ConfigFromJSON(authentication.GoogleJSONKey(), calendar.CalendarReadonlyScope)
+	if gConfigErr != nil {
+		logging.Log.Fatalf("Unable to parse client secret file to config: %v", gConfigErr)
+		return
+	}
+	client := getClient(ctx, config)
+
+	srv, calNewErr := calendar.New(client)
+	if calNewErr != nil {
+		logging.Log.Fatalf("Unable to retrieve calendar Client %v", calNewErr)
+		return
+	}
+
+	logging.Log.Info("Google authentication complete")
+
+	// Connecting to Slack
 	logging.Log.Info("Connecting to RTM")
 	rtm := api.NewRTM()
 	go rtm.ManageConnection()
@@ -383,251 +441,297 @@ func main() {
 	rtm.SendMessage(arrivedMsg)
 
 
-	// Google Calendar starts here
-	ctx := context.Background()
-		usr, usrErr := user.Current()
-		if usrErr != nil {
-				logging.Log.Fatalf("error")
-		return
-		}
-		CalAuthPath:=filepath.Join(usr.HomeDir, "client_secret.json")
-	  b, err := ioutil.ReadFile(CalAuthPath)
-	  if err != nil {
-	    logging.Log.Fatalf("Unable to read client secret file: %v", err)
-	  }
+	// Setting the Multithreading
+	runtime.GOMAXPROCS(3)
 
-	  // If modifying these scopes, delete your previously saved credentials
-	  // at ~/.credentials/calendar-go-quickstart.json
-	  config, err := google.ConfigFromJSON(b, calendar.CalendarReadonlyScope)
-	  if err != nil {
-	    logging.Log.Fatalf("Unable to parse client secret file to config: %v", err)
-	  }
-	  client := getClient(ctx, config)
-
-	  srv, err := calendar.New(client)
-	  if err != nil {
-	    logging.Log.Fatalf("Unable to retrieve calendar Client %v", err)
-	  }
-
-
-// Setting the Multithreading
-	runtime.GOMAXPROCS(2)
+	controlQueue := make(chan ControlMessage)
+	requestQueue := make(chan ControlMessage)
 
 	var wg sync.WaitGroup
-	wg.Add(2)
+	nThreads := 2
 
 	fmt.Println("Starting Go Routines")
 
 	// temp :=0
-// Starting the two loops
-	go func() {
-			defer wg.Done()
-			logging.Log.Infof("Starting MonitorLoop")
-			monitorLoop:
-				for {
-					select {
-					case event, chanOpen := <-rtm.IncomingEvents:
-						if ! chanOpen {
-							logging.Log.Warning("Incoming events channel is closed")
-							break monitorLoop
+	// Starting the two loops
+	wg.Add(1)
+	go func(ctrlChan chan ControlMessage, reqChan chan ControlMessage) {
+		defer wg.Done()
+		logging.Log.Infof("Starting MonitorLoop")
+monitorLoop:
+		for {
+			select {
+			case controlMsg, queueOk := <-ctrlChan:
+				if ! queueOk {
+					logging.Log.Error("Control channel has closed")
+					reqChan <- StopExecution
+					break monitorLoop
+				}
+				if controlMsg == StopExecution {
+					logging.Log.Info("Slack loop stopping on interrupt")
+					break monitorLoop
+				}
+			case event, chanOpen := <-rtm.IncomingEvents:
+				if ! chanOpen {
+					logging.Log.Warning("Incoming events channel is closed")
+					break monitorLoop
+				}
+				switch evData := event.Data.(type) {
+				case *slack.HelloEvent:
+					logging.Log.Info("Slack says \"hello\"")
+
+				case *slack.ConnectedEvent:
+					//logging.Log.Info("Infos:", evData.Info)
+					logging.Log.Info("Connected to Slack")
+					logging.Log.Infof("Connection counter: %v", evData.ConnectionCount)
+
+				case *slack.MessageEvent:
+					//logging.Log.Infof("Message: %v", evData)
+					if evData.SubType != "" {
+						break
+					}
+
+					logging.Log.Debugf("Got a message: %s", evData.Text)
+
+					if evData.Channel != channelID || evData.User == botUserID {
+						continue
+					}
+
+					logging.Log.Debug("Message is on the right channel")
+
+					if evData.Text[0] == '!' {
+						logging.Log.Debug("Received an instruction")
+						tokens := strings.SplitN(evData.Text, " ", 2)
+						command := strings.ToLower(tokens[0])
+						extraText := ""
+						logging.Log.Infof("Received command %s", command)
+						if len(tokens) > 1 {
+							extraText = tokens[1]
+							logging.Log.Infof("Extra text in the command: %s", extraText)
 						}
-						switch evData := event.Data.(type) {
-						case *slack.HelloEvent:
-							logging.Log.Info("Slack says \"hello\"")
-
-						case *slack.ConnectedEvent:
-							//logging.Log.Info("Infos:", evData.Info)
-							logging.Log.Info("Connected to Slack")
-							logging.Log.Infof("Connection counter: %v", evData.ConnectionCount)
-
-						case *slack.MessageEvent:
-							//logging.Log.Infof("Message: %v", evData)
-							if evData.SubType != "" {
-								break
-							}
-
-							logging.Log.Debugf("Got a message: %s", evData.Text)
-
-							if evData.Channel != channelID || evData.User == botUserID {
-								continue
-							}
-
-							logging.Log.Debug("Message is on the right channel")
-
-							if evData.Text[0] == '!' {
-								logging.Log.Debug("Received an instruction")
-								tokens := strings.SplitN(evData.Text, " ", 2)
-								command := strings.ToLower(tokens[0])
-								extraText := ""
-								logging.Log.Infof("Received command %s", command)
-								if len(tokens) > 1 {
-									extraText = tokens[1]
-									logging.Log.Infof("Extra text in the command: %s", extraText)
-								}
-								funcToRun, hasCommand := commandMap[command]
-								if ! hasCommand {
-									logging.Log.Warningf("Received unknown command: %s", command)
-									errorMsg := rtm.NewOutgoingMessage("I'm sorry, that's not something I know how to do", evData.Channel)
-									rtm.SendMessage(errorMsg)
-									continue
-								}
-								logging.Log.Debugf("Running function for command <%s>", command)
-								funcToRun(extraText, evData)
-								continue
-							}
-
-							if strings.Contains(evData.Text, botUserTag) {
-								if theOperator == "" {
-									logging.Log.Info("Got operator message, but no operator is assigned")
-									notifyMsg := rtm.NewOutgoingMessage("No operator assigned", evData.Channel)
-									rtm.SendMessage(notifyMsg)
-									continue
-								}
-
-								logging.Log.Info("Attempting to notify the operator")
-								notifyMsg := rtm.NewOutgoingMessage(theOperatorTag, evData.Channel)
-								rtm.SendMessage(notifyMsg)
-								continue
-							}
-							if strings.Contains(evData.Text, botUserTag) {
-								if theOperator == "" && len(tempOperators) == 0 {
-									logging.Log.Info("Got operator message, but no operator is assigned")
-									notifyMsg := rtm.NewOutgoingMessage("No operator assigned", evData.Channel)
-									rtm.SendMessage(notifyMsg)
-									continue
-								}
-
-								logging.Log.Info("Attempting to notify the operator")
-								notification := theOperatorTag
-								for _, tag := range tempOperators {
-									notification += " " + tag
-								}
-								notifyMsg := rtm.NewOutgoingMessage(notification, evData.Channel)
-								rtm.SendMessage(notifyMsg)
-								continue
-							}
-
-						//case *slack.PresenceChangeEvent:
-						//	logging.Log.Infof("Presence Change: %v", evData)
-
-						case *slack.LatencyReport:
-							logging.Log.Infof("Current latency: %v", evData.Value)
+						funcToRun, hasCommand := commandMap[command]
+						if ! hasCommand {
+							logging.Log.Warningf("Received unknown command: %s", command)
+							errorMsg := rtm.NewOutgoingMessage("I'm sorry, that's not something I know how to do", evData.Channel)
+							rtm.SendMessage(errorMsg)
 							continue
+						}
+						logging.Log.Debugf("Running function for command <%s>", command)
+						funcToRun(extraText, evData)
+						continue
+					}
 
-						case *slack.RTMError:
-							logging.Log.Warningf("RTM Error: %s", evData.Error())
+					if strings.Contains(evData.Text, botUserTag) {
+						if theOperator == "" {
+							logging.Log.Info("Got operator message, but no operator is assigned")
+							notifyMsg := rtm.NewOutgoingMessage("No operator assigned", evData.Channel)
+							rtm.SendMessage(notifyMsg)
 							continue
+						}
 
-						case *slack.InvalidAuthEvent:
-							logging.Log.Error("Invalid credentials")
-							break monitorLoop
+						logging.Log.Info("Attempting to notify the operator")
+						notifyMsg := rtm.NewOutgoingMessage(theOperatorTag, evData.Channel)
+						rtm.SendMessage(notifyMsg)
+						continue
+					}
+					if strings.Contains(evData.Text, botUserTag) {
+						if theOperator == "" && len(tempOperators) == 0 {
+							logging.Log.Info("Got operator message, but no operator is assigned")
+							notifyMsg := rtm.NewOutgoingMessage("No operator assigned", evData.Channel)
+							rtm.SendMessage(notifyMsg)
+							continue
+						}
 
-						default:
+						logging.Log.Info("Attempting to notify the operator")
+						notification := theOperatorTag
+						for _, tag := range tempOperators {
+							notification += " " + tag
+						}
+						notifyMsg := rtm.NewOutgoingMessage(notification, evData.Channel)
+						rtm.SendMessage(notifyMsg)
+						continue
+					}
 
-							// Ignore other events..
-							//logging.Log.Infof("Unexpected: %v", event.Data)
+				//case *slack.PresenceChangeEvent:
+				//	logging.Log.Infof("Presence Change: %v", evData)
+
+				case *slack.LatencyReport:
+					logging.Log.Infof("Current latency: %v", evData.Value)
+					continue
+
+				case *slack.RTMError:
+					logging.Log.Warningf("RTM Error: %s", evData.Error())
+					continue
+
+				case *slack.InvalidAuthEvent:
+					logging.Log.Error("Invalid credentials")
+					reqChan <- ThreadCannotContinue
+					break monitorLoop
+
+				default:
+
+					// Ignore other events..
+					//logging.Log.Infof("Unexpected: %v", event.Data)
+
+				}
+			}
+		}
+	}(controlQueue, requestQueue)
+
+	wg.Add(1)
+	go func(ctrlChan chan ControlMessage, reqChan chan ControlMessage) {
+		defer wg.Done()
+
+		initMessageSent:= false
+		// proutLoop:
+		logging.Log.Infof("Starting GCal loop")
+gCalLoop:
+		for  {
+			select {
+			case controlMsg, queueOk := <-ctrlChan:
+				if ! queueOk {
+					logging.Log.Error("Control channel has closed")
+					reqChan <- StopExecution
+					break gCalLoop
+				}
+				if controlMsg == StopExecution {
+					logging.Log.Info("Slack loop stopping on interrupt")
+					break gCalLoop
+				}
+
+			case <-time.After(10 * time.Second):
+
+				t := time.Now().Format(time.RFC3339)
+				events, err := srv.Events.List("primary").ShowDeleted(false).
+					SingleEvents(true).TimeMin(t).MaxResults(100).OrderBy("startTime").Do()
+				if err != nil {
+					logging.Log.Fatalf("Unable to retrieve next ten of the user's events. %v", err)
+				}
+				logging.Log.Infof("Found "+ strconv.Itoa(len(events.Items))+" events in the Google Calendar." )
+				// var buffer bytes.Buffer
+				// buffer.WriteString("Found ")
+				// buffer.WriteString(strconv.FormatInt(int64(len(events.Items)),10))
+				// buffer.WriteString(" events in the Calendar")
+				//
+				// errorMsg := rtm.NewOutgoingMessage(buffer.String(), channelID)
+				// rtm.SendMessage(errorMsg)
+				// layout := "2006-01-02"
+				// logging.Log.Infof("Upcoming events:")
+				if len(events.Items) > 0 {
+					for _, i := range events.Items {
+						var whenStart string
+						var whenEnd string
+						// If the DateTime is an empty string the Event is an all-day Event.
+						// So only Date is available.
+
+						if strings.Contains(i.Summary,"Operator:") {
+
+							if i.Start.DateTime != "" {
+								whenStart = i.Start.DateTime
+							} else {
+								whenStart = i.Start.Date
+							}
+							if i.End.DateTime != "" {
+								whenEnd = i.End.DateTime
+							} else {
+								whenEnd = i.End.Date
+							}
+							const shortForm = "2006-01-02"
+							whenStartTime, _ := time.Parse(shortForm, whenStart)
+							whenStartTime = whenStartTime.Add(time.Hour*time.Duration(9))
+							whenEndTime, _ := time.Parse(shortForm, whenEnd)
+							whenEndTime = whenEndTime.Add(time.Hour*time.Duration(9))
+							// fmt.Println(whenStartTime,whenEndTime)
+							operatorName:=strings.Replace(i.Summary,"Operator: ","",-1)
+							print(userIDMap[theOperator] + "   " + operatorName+"\n")
+							if inTimeSpan(whenStartTime,whenEndTime,time.Now()) {
+								if !initMessageSent{
+									msgToSend:= "Found the current operator: " + operatorName + " (shift period: " + whenStart + ":9AM--"+ whenEnd + ":9AM)"
+									logging.Log.Infof(msgToSend)
+									logging.Log.Debug("Sending above message to Slack")
+									slackMsg := rtm.NewOutgoingMessage(msgToSend, channelID)
+									rtm.SendMessage(slackMsg)
+									initMessageSent=true
+								} else {
+									msgToSend:= "Initial message already sent"
+									logging.Log.Infof(msgToSend)
+								}
+								// print(theOperator,operatorName)
+
+							} else {
+									msgToSend:= operatorName + "is not the current operator"
+									logging.Log.Infof(msgToSend)
+							}
+
+
+						}
+							// extractedTime, err := time.Parse(layout, str)
+							//
+							// if inTimeSpan(whenStart, whenEnd, t) {
+					// 	logging.Log.Debugf(t, "is between", whenStart, "and", whenEnd, ".")
+							// 	logging.Log.Infof(input[len("Operator: "):]," is the operator.")
+						// }
+
+						}
+				} else {
+					fmt.Printf("No upcoming events found.\n")
+				}
 
 			}
 		}
-	}
-}()
+	}(controlQueue, requestQueue)
 
+	// now just wait for the signal to stop.  this is either a ctrl+c
+	// or a SIGTERM.
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt)
+	signal.Notify(sigChan, syscall.SIGTERM)
+stopLoop:
+	for {
+		select {
+		case <-sigChan:
+			logging.Log.Notice("Termination requested...")
+			break stopLoop
 
-	go func() {
-			defer wg.Done()
-
-			initMessageSent:= false
-			// proutLoop:
-			logging.Log.Infof("Starting GCal loop")
-			for  {
-
-						t := time.Now().Format(time.RFC3339)
-						events, err := srv.Events.List("primary").ShowDeleted(false).
-							SingleEvents(true).TimeMin(t).MaxResults(100).OrderBy("startTime").Do()
-						if err != nil {
-							logging.Log.Fatalf("Unable to retrieve next ten of the user's events. %v", err)
-						}
-						logging.Log.Infof("Found "+ strconv.Itoa(len(events.Items))+" events in the Google Calendar." )
-						// var buffer bytes.Buffer
-						// buffer.WriteString("Found ")
-						// buffer.WriteString(strconv.FormatInt(int64(len(events.Items)),10))
-						// buffer.WriteString(" events in the Calendar")
-						//
-						// errorMsg := rtm.NewOutgoingMessage(buffer.String(), channelID)
-						// rtm.SendMessage(errorMsg)
-						// layout := "2006-01-02"
-						// logging.Log.Infof("Upcoming events:")
-						if len(events.Items) > 0 {
-							for _, i := range events.Items {
-								var whenStart string
-								var whenEnd string
-								// If the DateTime is an empty string the Event is an all-day Event.
-								// So only Date is available.
-
-								if strings.Contains(i.Summary,"Operator:") {
-
-									if i.Start.DateTime != "" {
-										whenStart = i.Start.DateTime
-									} else {
-										whenStart = i.Start.Date
-									}
-									if i.End.DateTime != "" {
-										whenEnd = i.End.DateTime
-									} else {
-										whenEnd = i.End.Date
-									}
-									const shortForm = "2006-01-02"
-									whenStartTime, _ := time.Parse(shortForm, whenStart)
-									whenStartTime = whenStartTime.Add(time.Hour*time.Duration(9))
-									whenEndTime, _ := time.Parse(shortForm, whenEnd)
-									whenEndTime = whenEndTime.Add(time.Hour*time.Duration(9))
-									// fmt.Println(whenStartTime,whenEndTime)
-									operatorName:=strings.Replace(i.Summary,"Operator: ","",-1)
-									print(userIDMap[theOperator] + "   " + operatorName+"\n")
-									if inTimeSpan(whenStartTime,whenEndTime,time.Now()) {
-										if !initMessageSent{
-											msgToSend:= "Found the current operator: " + operatorName + " (shift period: " + whenStart + ":9AM--"+ whenEnd + ":9AM)"
-											logging.Log.Infof(msgToSend)
-											logging.Log.Debug("Sending above message to Slack")
-											slackMsg := rtm.NewOutgoingMessage(msgToSend, channelID)
-											rtm.SendMessage(slackMsg)
-											initMessageSent=true
-										} else {
-											msgToSend:= "Initial message already sent"
-											logging.Log.Infof(msgToSend)
-										}
-										// print(theOperator,operatorName)
-
-									} else {
-											msgToSend:= operatorName + "is not the current operator"
-											logging.Log.Infof(msgToSend)
-									}
-
-
-								}
-									// extractedTime, err := time.Parse(layout, str)
-									//
-									// if inTimeSpan(whenStart, whenEnd, t) {
-        					// 	logging.Log.Debugf(t, "is between", whenStart, "and", whenEnd, ".")
-									// 	logging.Log.Infof(input[len("Operator: "):]," is the operator.")
-    							// }
-
-								}
-						} else {
-							fmt.Printf("No upcoming events found.\n")
-						}
-						time.Sleep(10*time.Second)
+		case requestMsg := <-requestQueue:
+			switch requestMsg {
+			case ThreadCannotContinue:
+				logging.Log.Notice("Thread error!  Cannot continue running")
+				break stopLoop
+			case StopExecution:
+				logging.Log.Notice("Stop-execution request received")
+				break stopLoop
 			}
+		}
+	}
+
+	// Close the threads gracefully
+	// Use the select/default idiom to avoid the problem where one of the threads has already
+	// closed and we can't send to the control queue
+	logging.Log.Infof("Stopping %d threads", nThreads)
+	for i := 0; i < nThreads; i++ {
+		select {
+		case controlQueue <- StopExecution:
+		default:
+		}
+	}
+
+	// Timed call to pool.Wait() in case one or more of the threads refuses to close
+	// Use the channel-based concurrency pattern (http://blog.golang.org/go-concurrency-patterns-timing-out-and)
+	// We have to wrap pool.Wait() in a go routine that sends on a channel
+	waitChan := make(chan bool, 1)
+	go func() {
+		wg.Wait()
+		waitChan <- true
 	}()
+	select {
+	case <-waitChan:
+		logging.Log.Info("All goroutines finished.")
+	case <-time.After(1 * time.Second):
+		logging.Log.Info("Timed out waiting for goroutines to finish.")
+	}
 
-	logging.Log.Info("Waiting To Finish")
-	wg.Wait()
-
-	logging.Log.Info("\nTerminating Program")
-
-
-	logging.Log.Info("Waiting for events")
-
+	logging.Log.Info("Terminating Program")
 
 	leavingMsg := rtm.NewOutgoingMessage("Signing off!", channelID)
 	rtm.SendMessage(leavingMsg)
