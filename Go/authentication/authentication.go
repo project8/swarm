@@ -152,4 +152,3 @@ func GoogleAvailable() bool {
 func GoogleJSONKey() []byte {
 	return Authenticators.Google.JSONKey
 }
-

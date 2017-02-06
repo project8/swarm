@@ -204,11 +204,14 @@ func main() {
 	logging.Log.Info("Created Slack API")
 
 	// make a map from user ID to name, and a map from user name to ID
+	// make a map for getting userID from the real (complete) name
 	var userIDMap map[string]string
-	var userRealNameMap map[string]string
+	var userRealNameToIDMap map[string]string
+	var userIDToRealNameMap map[string]string
 	var userNameMap map[string]string
 	userIDMap = make(map[string]string)
-	userRealNameMap = make(map[string]string)
+	userRealNameToIDMap = make(map[string]string)
+	userIDToRealNameMap = make(map[string]string)
 	userNameMap = make(map[string]string)
 	botUserID := ""
 	users, usersErr := api.GetUsers()
@@ -217,10 +220,10 @@ func main() {
 		os.Exit(1)
 	} else {
 		for _, user := range users {
-			print(user.Name+"\t"+user.ID+"\t"+user.RealName+"\n")
 			userIDMap[user.ID] = user.Name
 			userNameMap[user.Name] = user.ID
-			userRealNameMap[user.RealName] = user.ID
+			userRealNameToIDMap[user.RealName] = user.ID
+			userIDToRealNameMap[user.ID] = user.RealName
 			if user.Name == botUserName {
 				botUserID = user.ID
 			}
@@ -257,6 +260,9 @@ func main() {
 	theOperatorTag := ""
 	var tempOperators map[string]string
 	tempOperators = make(map[string]string)
+
+	// channel to update operator when found in the gcal
+	OperatorNameChannel := make(chan string)
 
 	// Google authentication
 	ctx := context.Background()
@@ -321,7 +327,7 @@ func main() {
 		}
 		var msgText string
 		if theOperator != "" {
-			msgText += "The operator is " + userIDMap[theOperator] + ".  "
+			msgText += "The operator is " + theOperator + ".  "
 		}
 		if len(tempOperators) != 0 {
 			msgText += "Temporary operators: "
@@ -333,51 +339,51 @@ func main() {
 		rtm.SendMessage(wioMessage)
 		return
 	}
-	commandMap["!startshift"] = func(_ string, msg *slack.MessageEvent) {
-		logging.Log.Info("Shift starting for user " + userIDMap[msg.User])
-		theOperator = msg.User
-		theOperatorTag = getOperatorTag(theOperator)
-		ssMessage := rtm.NewOutgoingMessage("Happy operating, " + userIDMap[theOperator] + "!", msg.Channel)
-		rtm.SendMessage(ssMessage)
-		return
-	}
-	commandMap["!endshift"] = func(_ string, msg *slack.MessageEvent) {
-		if msg.User != theOperator {
-			logging.Log.Debug("Received end-shift command from non-operator")
-			usMessage := rtm.NewOutgoingMessage("I can't end your shift, because you're not the operator", msg.Channel)
-			rtm.SendMessage(usMessage)
-			return
-		}
-		logging.Log.Info("Shift ended for user " + userIDMap[theOperator])
-		//changeOperator <- ""
-		theOperator = ""
-		theOperatorTag = ""
-		usMessage := rtm.NewOutgoingMessage("Your shift is over, thanks!", msg.Channel)
-		rtm.SendMessage(usMessage)
-		return
-	}
-	commandMap["!overrideshift"] = func(username string, msg *slack.MessageEvent) {
-		if username != "" {
-			logging.Log.Info("Shift starting for user " + username)
-			newUserID, hasID := userNameMap[username]
-			if ! hasID {
-				logging.Log.Warningf("Unknown username: %s", username)
-				osMessage := rtm.NewOutgoingMessage("I'm sorry, I don't recognize that username", msg.Channel)
-				rtm.SendMessage(osMessage)
-				return
-			}
-			theOperator = newUserID
-			theOperatorTag = getOperatorTag(theOperator)
-			osMessage := rtm.NewOutgoingMessage("Happy operating, " + userIDMap[theOperator] + "!", msg.Channel)
-			rtm.SendMessage(osMessage)
-		} else {
-			theOperator = ""
-			theOperatorTag = ""
-			osMessage := rtm.NewOutgoingMessage("Operator has been removed", msg.Channel)
-			rtm.SendMessage(osMessage)
-		}
-		return
-	}
+	// commandMap["!startshift"] = func(_ string, msg *slack.MessageEvent) {
+	// 	logging.Log.Info("Shift starting for user " + userIDMap[msg.User])
+	// 	theOperator = msg.User
+	// 	theOperatorTag = getOperatorTag(theOperator)
+	// 	ssMessage := rtm.NewOutgoingMessage("Happy operating, " + userIDMap[theOperator] + "!", msg.Channel)
+	// 	rtm.SendMessage(ssMessage)
+	// 	return
+	// }
+	// commandMap["!endshift"] = func(_ string, msg *slack.MessageEvent) {
+	// 	if msg.User != theOperator {
+	// 		logging.Log.Debug("Received end-shift command from non-operator")
+	// 		usMessage := rtm.NewOutgoingMessage("I can't end your shift, because you're not the operator", msg.Channel)
+	// 		rtm.SendMessage(usMessage)
+	// 		return
+	// 	}
+	// 	logging.Log.Info("Shift ended for user " + userIDMap[theOperator])
+	// 	//changeOperator <- ""
+	// 	theOperator = ""
+	// 	theOperatorTag = ""
+	// 	usMessage := rtm.NewOutgoingMessage("Your shift is over, thanks!", msg.Channel)
+	// 	rtm.SendMessage(usMessage)
+	// 	return
+	// }
+	// commandMap["!overrideshift"] = func(username string, msg *slack.MessageEvent) {
+	// 	if username != "" {
+	// 		logging.Log.Info("Shift starting for user " + username)
+	// 		newUserID, hasID := userNameMap[username]
+	// 		if ! hasID {
+	// 			logging.Log.Warningf("Unknown username: %s", username)
+	// 			osMessage := rtm.NewOutgoingMessage("I'm sorry, I don't recognize that username", msg.Channel)
+	// 			rtm.SendMessage(osMessage)
+	// 			return
+	// 		}
+	// 		theOperator = newUserID
+	// 		theOperatorTag = getOperatorTag(theOperator)
+	// 		osMessage := rtm.NewOutgoingMessage("Happy operating, " + userIDMap[theOperator] + "!", msg.Channel)
+	// 		rtm.SendMessage(osMessage)
+	// 	} else {
+	// 		theOperator = ""
+	// 		theOperatorTag = ""
+	// 		osMessage := rtm.NewOutgoingMessage("Operator has been removed", msg.Channel)
+	// 		rtm.SendMessage(osMessage)
+	// 	}
+	// 	return
+	// }
 	commandMap["!tempoperator"] = func(username string, msg *slack.MessageEvent) {
 		if username != "" {
 			logging.Log.Info("Adding as temporary operator user " + username)
@@ -439,14 +445,16 @@ func main() {
 	var wg sync.WaitGroup
 	nThreads := 2
 
-	fmt.Println("Starting Go Routines")
+	logging.Log.Info("Starting Go Routines")
 
 	// temp :=0
 	// Starting the two loops
 	wg.Add(1)
-	go func(ctrlChan chan ControlMessage, reqChan chan ControlMessage) {
+	go func(opChan chan string, ctrlChan chan ControlMessage, reqChan chan ControlMessage) {
 		defer wg.Done()
 		logging.Log.Infof("Starting MonitorLoop")
+		// theOperator:=""
+		// theOperatorTag:=""
 monitorLoop:
 		for {
 			select {
@@ -460,6 +468,20 @@ monitorLoop:
 					logging.Log.Info("Slack loop stopping on interrupt")
 					break monitorLoop
 				}
+			case operatorChanToChange, opChanOK := <-opChan:
+				if ! opChanOK {
+					logging.Log.Error("Error")
+				}
+				logging.Log.Debug("Channel gave an operator name: %s", operatorChanToChange )
+				if operatorChanToChange!=""{
+				theOperator=operatorChanToChange
+				theOperatorTag = getOperatorTag(theOperator)
+				ssMessage := rtm.NewOutgoingMessage("Happy operating, " + theOperator + "!", channelID )
+				rtm.SendMessage(ssMessage)
+				} else {
+					logging.Log.Critical("Operator name given is null")
+				}
+
 			case event, chanOpen := <-rtm.IncomingEvents:
 				if ! chanOpen {
 					logging.Log.Warning("Incoming events channel is closed")
@@ -541,6 +563,9 @@ monitorLoop:
 						continue
 					}
 
+
+
+
 				//case *slack.PresenceChangeEvent:
 				//	logging.Log.Infof("Presence Change: %v", evData)
 
@@ -565,13 +590,14 @@ monitorLoop:
 				}
 			}
 		}
-	}(controlQueue, requestQueue)
+	}(OperatorNameChannel, controlQueue, requestQueue)
 
 	wg.Add(1)
 	go func(ctrlChan chan ControlMessage, reqChan chan ControlMessage) {
 		defer wg.Done()
 
 		initMessageSent:= false
+		theOperator:=""
 		// proutLoop:
 		logging.Log.Infof("Starting GCal loop")
 gCalLoop:
@@ -594,22 +620,16 @@ gCalLoop:
 				events, err := srv.Events.List("primary").ShowDeleted(false).
 					SingleEvents(true).TimeMin(t).MaxResults(100).OrderBy("startTime").Do()
 				if err != nil {
-					logging.Log.Fatalf("Unable to retrieve next ten of the user's events. %v", err)
+					logging.Log.Fatalf("Unable to retrieve next 100 of the user's events. %v", err)
 				}
 				logging.Log.Infof("Found "+ strconv.Itoa(len(events.Items))+" events in the Google Calendar." )
-				// var buffer bytes.Buffer
-				// buffer.WriteString("Found ")
-				// buffer.WriteString(strconv.FormatInt(int64(len(events.Items)),10))
-				// buffer.WriteString(" events in the Calendar")
-				//
-				// errorMsg := rtm.NewOutgoingMessage(buffer.String(), channelID)
-				// rtm.SendMessage(errorMsg)
-				// layout := "2006-01-02"
-				// logging.Log.Infof("Upcoming events:")
+				foundTheCurrentOp:=false
+				isItANewOp:=false
+				var whenStart string
+				var whenEnd string
 				if len(events.Items) > 0 {
 					for _, i := range events.Items {
-						var whenStart string
-						var whenEnd string
+
 						// If the DateTime is an empty string the Event is an all-day Event.
 						// So only Date is available.
 
@@ -630,42 +650,44 @@ gCalLoop:
 							whenStartTime = whenStartTime.Add(time.Hour*time.Duration(9))
 							whenEndTime, _ := time.Parse(shortForm, whenEnd)
 							whenEndTime = whenEndTime.Add(time.Hour*time.Duration(9))
-							// fmt.Println(whenStartTime,whenEndTime)
-							operatorName:=strings.Replace(i.Summary,"Operator: ","",-1)
-							print(userRealNameMap["operatorName"] + "   " + operatorName+"\n")
-							if inTimeSpan(whenStartTime,whenEndTime,time.Now()) {
-								if !initMessageSent{
-									msgToSend:= "Found the current operator: " + operatorName + " (shift period: " + whenStart + ":9AM--"+ whenEnd + ":9AM)"
-									logging.Log.Infof(msgToSend)
-									logging.Log.Debug("Sending above message to Slack")
-									slackMsg := rtm.NewOutgoingMessage(msgToSend, channelID)
-									rtm.SendMessage(slackMsg)
-									initMessageSent=true
-								} else {
-									msgToSend:= "Initial message already sent"
-									logging.Log.Infof(msgToSend)
-								}
-								// print(theOperator,operatorName)
-
-							} else {
-									msgToSend:= operatorName + "is not the current operator"
-									logging.Log.Infof(msgToSend)
+							foundOperatorFullName:=strings.Replace(i.Summary,"Operator: ","",-1)
+							foundOperatorID, err:=userRealNameToIDMap[foundOperatorFullName]
+							if err == false {
+								// when failed to found, err is false
+								logging.Log.Fatalf("Error when finding Slack User ID")
 							}
-
-
+							if inTimeSpan(whenStartTime,whenEndTime,time.Now()) {
+								//here is where the channel comes
+								foundTheCurrentOp=true
+								if theOperator!=userIDMap[foundOperatorID] {
+									logging.Log.Infof("Changing old operator ("+theOperator+") to " +  foundOperatorFullName + "\t(" + userIDMap[foundOperatorID])
+									theOperator = userIDMap[foundOperatorID]
+									isItANewOp=true
+								}
+								continue
+							}
 						}
-							// extractedTime, err := time.Parse(layout, str)
-							//
-							// if inTimeSpan(whenStart, whenEnd, t) {
-					// 	logging.Log.Debugf(t, "is between", whenStart, "and", whenEnd, ".")
-							// 	logging.Log.Infof(input[len("Operator: "):]," is the operator.")
-						// }
+					}
 
-						}
 				} else {
-					fmt.Printf("No upcoming events found.\n")
+					logging.Log.Infof("No upcoming events found.\n")
+				}
+				if !foundTheCurrentOp {
+					logging.Log.Debugf("No current operator found")
+					theOperator=""
 				}
 
+				if initMessageSent  && !isItANewOp  {
+					msgToSend:= "Not a new op and initial message already sent"
+					logging.Log.Infof(msgToSend)
+				} else {
+					msgToSend:= "Found the new operator: " + userIDToRealNameMap[userNameMap[theOperator]] + " (shift period: " + whenStart + ":9AM--"+ whenEnd + ":9AM)"
+					logging.Log.Infof(msgToSend)
+					slackMsg := rtm.NewOutgoingMessage(msgToSend, channelID)
+					rtm.SendMessage(slackMsg)
+					OperatorNameChannel<-theOperator
+					initMessageSent=true
+				}
 			}
 		}
 	}(controlQueue, requestQueue)
