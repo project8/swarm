@@ -310,9 +310,9 @@ func main() {
 			"\t`!hello`: say hi\n" +
 			"\t`!help`: display this help message\n" +
 			"\t`!whoisop`: show who the current operator is, plus any temporary operators\n" +
-			"\t`!startshift`: manually start your shift, replacing the existing operator\n" +
-			"\t`!endshift`: remove yourself as the operator\n" +
-			"\t`!overrideshift [username (optional)]`: replace the current operator with a manually-specified operator; if no operator is specified, the current operator will be removed\n" +
+			// "\t`!startshift`: manually start your shift, replacing the existing operator\n" +
+			// "\t`!endshift`: remove yourself as the operator\n" +
+			// "\t`!overrideshift [username (optional)]`: replace the current operator with a manually-specified operator; if no operator is specified, the current operator will be removed\n" +
 			"\t`!tempoperator [username (optional)]`: add yourself or someone else as a temporary operator; leave the username blank to add yourself\n" +
 			"\t`!removetempoperator [username (optional)]`: remove yourself or someone else as temporary operator; leave the username blank to remove yourself"
 			logging.Log.Debug("Printing help message")
@@ -453,8 +453,6 @@ func main() {
 	go func(opChan chan string, ctrlChan chan ControlMessage, reqChan chan ControlMessage) {
 		defer wg.Done()
 		logging.Log.Infof("Starting MonitorLoop")
-		// theOperator:=""
-		// theOperatorTag:=""
 monitorLoop:
 		for {
 			select {
@@ -563,9 +561,6 @@ monitorLoop:
 						continue
 					}
 
-
-
-
 				//case *slack.PresenceChangeEvent:
 				//	logging.Log.Infof("Presence Change: %v", evData)
 
@@ -583,7 +578,6 @@ monitorLoop:
 					break monitorLoop
 
 				default:
-
 					// Ignore other events..
 					//logging.Log.Infof("Unexpected: %v", event.Data)
 
@@ -632,7 +626,6 @@ gCalLoop:
 
 						// If the DateTime is an empty string the Event is an all-day Event.
 						// So only Date is available.
-
 						if strings.Contains(i.Summary,"Operator:") {
 
 							if i.Start.DateTime != "" {
