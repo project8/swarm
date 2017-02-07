@@ -28,21 +28,27 @@ type SlackCredentialType struct {
 	Available bool
 }
 
+type GoogleCredentialType struct {
+	JSONKey []byte
+	Available bool
+}
+
 type AuthenticatorsType struct {
 	Amqp AmqpCredentialType `json:"amqp"`
 	Slack SlackCredentialType
+	Google GoogleCredentialType
 }
 
 var Authenticators AuthenticatorsType
 
 func Load() (e error) {
 	// Get the home directory, where the authenticators live
-    usr, usrErr := user.Current()
-    if usrErr != nil {
-        e = usrErr
+	usr, usrErr := user.Current()
+	if usrErr != nil {
+		e = usrErr
 		return
-    }
-    //log.Println( usr.HomeDir )
+	}
+	//log.Println( usr.HomeDir )
 
 	// Read in the authenticators file
 	authFilePath := filepath.Join(usr.HomeDir, ".project8_authentications.json")
@@ -82,6 +88,17 @@ func Load() (e error) {
 		if len(Authenticators.Slack.Tokens) > 0 {
 			Authenticators.Slack.Available = true
 		}
+	}
+
+	if googleDecodedData_raw, hasGoogle := authDecodedData["google"]; hasGoogle {
+		var marshallErr error
+		Authenticators.Google.JSONKey, marshallErr = json.Marshal(googleDecodedData_raw)
+		if marshallErr != nil {
+			e = marshallErr
+			return
+		}
+		//Authenticators.Google.JSONKey = jsonKey
+		Authenticators.Google.Available = true
 	}
 
 	return
@@ -124,4 +141,14 @@ func SlackToken(username string) string {
 	} else {
 		return ""
 	}
+}
+
+// Google Convenience Functions
+
+func GoogleAvailable() bool {
+	return Authenticators.Google.Available
+}
+
+func GoogleJSONKey() []byte {
+	return Authenticators.Google.JSONKey
 }
