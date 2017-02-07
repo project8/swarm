@@ -1,12 +1,9 @@
 {
-	"log-level": "DEBUG",
+	"log-level": "INFO",
 
 	"username": "operator",
 
 	"channel": "test_operator",
 
-	"usercorrespondance":
-						{"Christine Claessens": "cclaessens",
-						 "Noah Oblath": "nsoblath",
-					   "Mathieu Guigue": "guigue"}
+	"calendar": "primary"
 }

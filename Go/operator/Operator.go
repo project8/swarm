@@ -1,5 +1,15 @@
 package main
 
+/*
+Configuration Options
+	"log-level": (default: INFO) Verbosity of terminal output; Options are DEBUG, INFO, NOTICE, WARNING, ERROR, and CRITICAL
+	"username": (default: operator) Username of the bot
+	"channel": (default: test_operator) Channel to monitor and post in
+	"calendar": (default: primary) ID of the Project 8 Google calendar. 
+	            If you authenticated with the project8experiment account, it's "primary"; 
+	            if you authenticated with your own account, it's "project8experiment@gmail.com"
+*/
+
 import (
 	"fmt"
 	"flag"
@@ -155,6 +165,7 @@ func main() {
 	viper.SetDefault("username", "project8")
 	viper.SetDefault("log-level", "INFO")
 	viper.SetDefault("channel", "test_op")
+	viper.SetDefault("calendar", "primary")
 
 	// load config
 	viper.SetConfigFile(configFile)
@@ -169,6 +180,8 @@ func main() {
 	botUserName := viper.GetString("username")
 
 	channelName := viper.GetString("channel")
+
+	calendarName := viper.GetString("calendar")
 
 	// check Authentications
 	if authErr := authentication.Load(); authErr != nil {
@@ -250,12 +263,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Information about the operator and temporary operators
-	theOperator := ""
-	theOperatorTag := ""
-	var tempOperators map[string]string
-	tempOperators = make(map[string]string)
-
 	// channel to update operator when found in the gcal
 	OperatorNameChannel := make(chan string)
 
@@ -290,96 +297,6 @@ func main() {
 		}
 	}()
 
-	// Setup the commands that are used
-	var commandMap map[string]func(string, *slack.MessageEvent)
-	commandMap = make(map[string]func(string, *slack.MessageEvent))
-	commandMap["!hello"] = func(_ string, msg *slack.MessageEvent) {
-		hiMsg := rtm.NewOutgoingMessage("Hi, " + userIDMap[msg.User], msg.Channel)
-		rtm.SendMessage(hiMsg)
-		return
-	}
-	commandMap["!help"] = func(_ string, msg *slack.MessageEvent) {
-		msgText := "You can either address me with `@operator` or enter a command.\n\n" +
-			"If you address me with `@operator` I'll pass a notification on to the current operator.\n\n" +
-			"I determine the current operator from the Operator entries in the Google calendar. If you need to make modifications to the current or future operator, please contact the operations coordinator.\n\n" +
-			"If you enter a command, I can take certain actions:\n" +
-			"\t`!hello`: say hi\n" +
-			"\t`!help`: display this help message\n" +
-			"\t`!whoisop`: show who the current operator is, plus any temporary operators\n" +
-			"\t`!tempoperator [username (optional)]`: add yourself or someone else as a temporary operator; leave the username blank to add yourself\n" +
-			"\t`!removetempoperator [username (optional)]`: remove yourself or someone else as temporary operator; leave the username blank to remove yourself"
-			logging.Log.Debug("Printing help message")
-			helpMsg := rtm.NewOutgoingMessage(msgText, msg.Channel)
-			rtm.SendMessage(helpMsg)
-	}
-	commandMap["!whoisop"] = func(_ string, msg *slack.MessageEvent) {
-		if theOperator == "" && len(tempOperators) == 0 {
-			wioMessage := rtm.NewOutgoingMessage("There is no operator assigned right now", msg.Channel)
-			rtm.SendMessage(wioMessage)
-			return
-		}
-		var msgText string
-		if theOperator != "" {
-			msgText += "The operator is " + theOperator + ".  "
-		}
-		if len(tempOperators) != 0 {
-			msgText += "Temporary operators: "
-			for userID, _ := range tempOperators {
-				msgText += userIDMap[userID] + " "
-			}
-		}
-		wioMessage := rtm.NewOutgoingMessage(msgText, msg.Channel)
-		rtm.SendMessage(wioMessage)
-		return
-	}
-	commandMap["!tempoperator"] = func(username string, msg *slack.MessageEvent) {
-		if username != "" {
-			logging.Log.Info("Adding as temporary operator user " + username)
-			newUserID, hasID := userNameMap[username]
-			if ! hasID {
-				logging.Log.Warningf("Unknown username: %s", username)
-				osMessage := rtm.NewOutgoingMessage("I'm sorry, I don't recognize that username", msg.Channel)
-				rtm.SendMessage(osMessage)
-				return
-			}
-			tempOperators[newUserID] = getOperatorTag(newUserID)
-			osMessage := rtm.NewOutgoingMessage("Use your powers wisely, " + userIDMap[newUserID] + "!", msg.Channel)
-			rtm.SendMessage(osMessage)
-		} else {
-			logging.Log.Info("Adding as temporary operator user " + userIDMap[msg.User])
-			tempOperators[msg.User] = getOperatorTag(msg.User)
-			ssMessage := rtm.NewOutgoingMessage("Use your powers wisely, " + userIDMap[msg.User] + "!", msg.Channel)
-			rtm.SendMessage(ssMessage)
-		}
-	}
-	commandMap["!removetempoperator"] = func(username string, msg *slack.MessageEvent) {
-		toRemove := msg.User
-		if username != "" {
-			logging.Log.Info("Removing " + username + " from temporary operatorship")
-			toRemoveID, hasID := userNameMap[username]
-			if ! hasID {
-				logging.Log.Warningf("Unknown username: %s", username)
-				osMessage := rtm.NewOutgoingMessage("I'm sorry, I don't recognize that username", msg.Channel)
-				rtm.SendMessage(osMessage)
-				return
-			}
-			toRemove = toRemoveID
-		}
-
-		_, isTempOp := tempOperators[toRemove]
-		if ! isTempOp {
-			logging.Log.Debug("Received remove-temp-operator instruction from non-temp-operator")
-			usMessage := rtm.NewOutgoingMessage(userIDMap[toRemove] + " is not currently listed as a temporary operator", msg.Channel)
-			rtm.SendMessage(usMessage)
-			return
-		}
-		logging.Log.Info("Removing temporary operator " + userIDMap[toRemove])
-		delete(tempOperators, toRemove)
-		usMessage := rtm.NewOutgoingMessage("OK, you're all done, thanks!", msg.Channel)
-		rtm.SendMessage(usMessage)
-		return
-	}
-
 	arrivedMsg := rtm.NewOutgoingMessage("Have no fear, @operator is here!", channelID)
 	rtm.SendMessage(arrivedMsg)
 
@@ -398,6 +315,104 @@ func main() {
 	wg.Add(1)
 	go func(opChan chan string, ctrlChan chan ControlMessage, reqChan chan ControlMessage) {
 		defer wg.Done()
+
+		// Information about the operator and temporary operators
+		theOperator := ""
+		theOperatorTag := ""
+		var tempOperators map[string]string
+		tempOperators = make(map[string]string)
+
+		// Setup the commands that are used
+		var commandMap map[string]func(string, *slack.MessageEvent)
+		commandMap = make(map[string]func(string, *slack.MessageEvent))
+		commandMap["!hello"] = func(_ string, msg *slack.MessageEvent) {
+			hiMsg := rtm.NewOutgoingMessage("Hi, " + userIDMap[msg.User], msg.Channel)
+			rtm.SendMessage(hiMsg)
+			return
+		}
+		commandMap["!help"] = func(_ string, msg *slack.MessageEvent) {
+			msgText := "You can either address me with `@operator` or enter a command.\n\n" +
+				"If you address me with `@operator` I'll pass a notification on to the current operator.\n\n" +
+				"I determine the current operator from the Operator entries in the Google calendar. If you need to make modifications to the current or future operator, please contact the operations coordinator.\n\n" +
+				"If you enter a command, I can take certain actions:\n" +
+				"\t`!hello`: say hi\n" +
+				"\t`!help`: display this help message\n" +
+				"\t`!whoisop`: show who the current operator is, plus any temporary operators\n" +
+				"\t`!tempoperator [username (optional)]`: add yourself or someone else as a temporary operator; leave the username blank to add yourself\n" +
+				"\t`!removetempoperator [username (optional)]`: remove yourself or someone else as temporary operator; leave the username blank to remove yourself"
+				logging.Log.Debug("Printing help message")
+				helpMsg := rtm.NewOutgoingMessage(msgText, msg.Channel)
+				rtm.SendMessage(helpMsg)
+		}
+		commandMap["!whoisop"] = func(_ string, msg *slack.MessageEvent) {
+			if theOperator == "" && len(tempOperators) == 0 {
+				wioMessage := rtm.NewOutgoingMessage("There is no operator assigned right now", msg.Channel)
+				rtm.SendMessage(wioMessage)
+				return
+			}
+			var msgText string
+			if theOperator != "" {
+				msgText += "The operator is " + theOperator + ".  "
+			}
+			if len(tempOperators) != 0 {
+				msgText += "Temporary operators: "
+				for userID, _ := range tempOperators {
+					msgText += userIDMap[userID] + " "
+				}
+			}
+			wioMessage := rtm.NewOutgoingMessage(msgText, msg.Channel)
+			rtm.SendMessage(wioMessage)
+			return
+		}
+		commandMap["!tempoperator"] = func(username string, msg *slack.MessageEvent) {
+			if username != "" {
+				logging.Log.Info("Adding as temporary operator user " + username)
+				newUserID, hasID := userNameMap[username]
+				if ! hasID {
+					logging.Log.Warningf("Unknown username: %s", username)
+					osMessage := rtm.NewOutgoingMessage("I'm sorry, I don't recognize that username", msg.Channel)
+					rtm.SendMessage(osMessage)
+					return
+				}
+				tempOperators[newUserID] = getOperatorTag(newUserID)
+				osMessage := rtm.NewOutgoingMessage("Use your powers wisely, " + userIDMap[newUserID] + "!", msg.Channel)
+				rtm.SendMessage(osMessage)
+			} else {
+				logging.Log.Info("Adding as temporary operator user " + userIDMap[msg.User])
+				tempOperators[msg.User] = getOperatorTag(msg.User)
+				ssMessage := rtm.NewOutgoingMessage("Use your powers wisely, " + userIDMap[msg.User] + "!", msg.Channel)
+				rtm.SendMessage(ssMessage)
+			}
+		}
+		commandMap["!removetempoperator"] = func(username string, msg *slack.MessageEvent) {
+			toRemove := msg.User
+			if username != "" {
+				logging.Log.Info("Removing " + username + " from temporary operatorship")
+				toRemoveID, hasID := userNameMap[username]
+				if ! hasID {
+					logging.Log.Warningf("Unknown username: %s", username)
+					osMessage := rtm.NewOutgoingMessage("I'm sorry, I don't recognize that username", msg.Channel)
+					rtm.SendMessage(osMessage)
+					return
+				}
+				toRemove = toRemoveID
+			}
+
+			_, isTempOp := tempOperators[toRemove]
+			if ! isTempOp {
+				logging.Log.Debug("Received remove-temp-operator instruction from non-temp-operator")
+				usMessage := rtm.NewOutgoingMessage(userIDMap[toRemove] + " is not currently listed as a temporary operator", msg.Channel)
+				rtm.SendMessage(usMessage)
+				return
+			}
+			logging.Log.Info("Removing temporary operator " + userIDMap[toRemove])
+			delete(tempOperators, toRemove)
+			usMessage := rtm.NewOutgoingMessage("OK, you're all done, thanks!", msg.Channel)
+			rtm.SendMessage(usMessage)
+			return
+		}
+
+
 		logging.Log.Infof("Starting SlackLoop")
 slackLoop:
 		for {
@@ -416,14 +431,14 @@ slackLoop:
 				if ! opChanOK {
 					logging.Log.Error("Error")
 				}
-				logging.Log.Debug("Channel gave an operator name: %s", operatorChanToChange )
-				if operatorChanToChange!=""{
-					theOperator=operatorChanToChange
+				logging.Log.Debugf("Channel gave an operator name: %s", operatorChanToChange )
+				if operatorChanToChange != "" {
+					theOperator = operatorChanToChange
 					theOperatorTag = getOperatorTag(theOperator)
 					ssMessage := rtm.NewOutgoingMessage("Happy operating, " + theOperator + "!", channelID )
 					rtm.SendMessage(ssMessage)
 				} else {
-					logging.Log.Critical("Operator name given is null")
+					logging.Log.Warning("Operator name given is null")
 				}
 
 			case event, chanOpen := <-rtm.IncomingEvents:
@@ -554,7 +569,7 @@ gCalLoop:
 			case <-time.After(10 * time.Second):
 
 				t := time.Now().Format(time.RFC3339)
-				events, err := srv.Events.List("primary").ShowDeleted(false).
+				events, err := srv.Events.List(calendarName).ShowDeleted(false).
 					SingleEvents(true).TimeMin(t).MaxResults(100).OrderBy("startTime").Do()
 				if err != nil {
 					logging.Log.Fatalf("Unable to retrieve next 100 of the user's events. %v", err)
@@ -569,6 +584,7 @@ gCalLoop:
 				var whenEnd string
 				if len(events.Items) > 0 {
 					for _, i := range events.Items {
+						//logging.Log.Debugf("%v", i.Summary)
 
 						// If the DateTime is an empty string the Event is an all-day Event.
 						// So only Date is available.
@@ -607,7 +623,7 @@ gCalLoop:
 				if theOperator != userIDMap[currentOperatorID] {
 					logging.Log.Infof("I'm changing old operator (%s) to %s", theOperator, userIDMap[currentOperatorID])
 					theOperator = userIDMap[currentOperatorID]
-					isItANewOp=true
+					isItANewOp = true
 				}
 
 				if initMessageSent  && ! isItANewOp  {
