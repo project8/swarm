@@ -7,7 +7,6 @@ import (
 	"os/signal"
 	"os/user"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -302,7 +301,7 @@ func main() {
 	commandMap["!help"] = func(_ string, msg *slack.MessageEvent) {
 		msgText := "You can either address me with `@operator` or enter a command.\n\n" +
 			"If you address me with `@operator` I'll pass a notification on to the current operator.\n\n" +
-			"I determine the current operator from the Operator entries in the Google calendar. If you need to make modifications to the current or future operator, please do so in the calendar.
+			"I determine the current operator from the Operator entries in the Google calendar. If you need to make modifications to the current or future operator, please contact the operations coordinator.\n\n" +
 			"If you enter a command, I can take certain actions:\n" +
 			"\t`!hello`: say hi\n" +
 			"\t`!help`: display this help message\n" +
