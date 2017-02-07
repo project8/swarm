@@ -591,14 +591,9 @@ gCalLoop:
 							whenEndTime = whenEndTime.Add(time.Hour*time.Duration(9))
 							foundOperatorFullName:=strings.Replace(i.Summary,"Operator: ","",-1)
 							foundOperatorID,err:=userRealNameToIDMap[foundOperatorFullName]
-							if err == false {
-								// when failed to found, err is false
-								logging.Log.Fatalf("Error when finding Slack User ID")
-								continue
-							}
+
 							if inTimeSpan(whenStartTime,whenEndTime,time.Now()) {
 								//here is where the channel comes
-								// foundTheCurrentOp=true
 								currentOperatorID=foundOperatorID
 								continue
 							}
@@ -608,11 +603,7 @@ gCalLoop:
 				} else {
 					logging.Log.Infof("No upcoming events found.\n")
 				}
-				// if !foundTheCurrentOp {
-				// 	logging.Log.Debugf("No current operator found")
-				// 	currentOperatorID=""
-				// 	// isItANewOp=true
-				// }
+
 				if theOperator!=userIDMap[currentOperatorID] {
 					logging.Log.Infof("Changing old operator ("+theOperator+") to " + userIDMap[currentOperatorID])
 					theOperator = userIDMap[currentOperatorID]
