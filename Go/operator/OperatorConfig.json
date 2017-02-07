@@ -3,5 +3,7 @@
 
 	"username": "operator",
 
-	"channel": "test_operator"
+	"channel": "test_operator",
+
+	"calendar": "primary"
 }
