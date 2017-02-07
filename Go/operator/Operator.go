@@ -467,6 +467,10 @@ slackLoop:
 						continue
 					}
 
+					if evData.Text == "" {
+						continue
+					}
+
 					logging.Log.Debug("Message is on the right channel")
 
 					if evData.Text[0] == '!' {
