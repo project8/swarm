@@ -590,7 +590,7 @@ gCalLoop:
 							whenEndTime, _ := time.Parse(shortForm, whenEnd)
 							whenEndTime = whenEndTime.Add(time.Hour*time.Duration(9))
 							foundOperatorFullName:=strings.Replace(i.Summary,"Operator: ","",-1)
-							foundOperatorID,err:=userRealNameToIDMap[foundOperatorFullName]
+							foundOperatorID:=userRealNameToIDMap[foundOperatorFullName]
 
 							if inTimeSpan(whenStartTime,whenEndTime,time.Now()) {
 								//here is where the channel comes
