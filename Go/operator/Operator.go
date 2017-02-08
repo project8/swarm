@@ -5,8 +5,8 @@ Configuration Options
 	"log-level": (default: INFO) Verbosity of terminal output; Options are DEBUG, INFO, NOTICE, WARNING, ERROR, and CRITICAL
 	"username": (default: operator) Username of the bot
 	"channel": (default: test_operator) Channel to monitor and post in
-	"calendar": (default: primary) ID of the Project 8 Google calendar. 
-	            If you authenticated with the project8experiment account, it's "primary"; 
+	"calendar": (default: primary) ID of the Project 8 Google calendar.
+	            If you authenticated with the project8experiment account, it's "primary";
 	            if you authenticated with your own account, it's "project8experiment@gmail.com"
 */
 
@@ -495,19 +495,6 @@ slackLoop:
 						continue
 					}
 
-					if strings.Contains(evData.Text, botUserTag) {
-						if theOperator == "" {
-							logging.Log.Info("Got operator message, but no operator is assigned")
-							notifyMsg := rtm.NewOutgoingMessage("No operator assigned", evData.Channel)
-							rtm.SendMessage(notifyMsg)
-							continue
-						}
-
-						logging.Log.Info("Attempting to notify the operator")
-						notifyMsg := rtm.NewOutgoingMessage(theOperatorTag, evData.Channel)
-						rtm.SendMessage(notifyMsg)
-						continue
-					}
 					if strings.Contains(evData.Text, botUserTag) {
 						if theOperator == "" && len(tempOperators) == 0 {
 							logging.Log.Info("Got operator message, but no operator is assigned")
