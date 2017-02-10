@@ -11,8 +11,8 @@ Configuration Options
 */
 
 import (
-	"fmt"
 	"flag"
+	"fmt"
 	"os"
 	"os/signal"
 	"os/user"
@@ -37,7 +37,6 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/calendar/v3"
-
 )
 
 var monitorStarted bool = false
@@ -56,16 +55,17 @@ const (
 	ThreadCannotContinue = 1
 )
 
-func getOperatorTag(operator string) (string) {
+func getOperatorTag(operator string) string {
 	return "(<@" + operator + ">)"
 }
 func inTimeSpan(start, end, check time.Time) bool {
-    return check.After(start) && check.Before(end)
+	return check.After(start) && check.Before(end)
 }
-	// Setting Google Calendar interfacing
 
-	// getClient uses a Context and Config to retrieve a Token
-	// then generate a Client. It returns the generated Client.
+// Setting Google Calendar interfacing
+
+// getClient uses a Context and Config to retrieve a Token
+// then generate a Client. It returns the generated Client.
 func getClient(ctx context.Context, config *oauth2.Config) *http.Client {
 	cacheFile, err := tokenCacheFile()
 	if err != nil {
@@ -161,6 +161,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	fmt.Println(" ██████╗ ██████╗ ███████╗██████╗  █████╗ ████████╗ ██████╗ ██████╗ ")
+	fmt.Println("██╔═══██╗██╔══██╗██╔════╝██╔══██╗██╔══██╗╚══██╔══╝██╔═══██╗██╔══██╗")
+	fmt.Println("██║   ██║██████╔╝█████╗  ██████╔╝███████║   ██║   ██║   ██║██████╔╝")
+	fmt.Println("██║   ██║██╔═══╝ ██╔══╝  ██╔══██╗██╔══██║   ██║   ██║   ██║██╔══██╗")
+	fmt.Println("╚██████╔╝██║     ███████╗██║  ██║██║  ██║   ██║   ╚██████╔╝██║  ██║")
+	fmt.Println(" ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝")
+
 	// defult configuration
 	viper.SetDefault("username", "project8")
 	viper.SetDefault("log-level", "INFO")
@@ -189,7 +196,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if ! authentication.SlackAvailable(botUserName) {
+	if !authentication.SlackAvailable(botUserName) {
 		logging.Log.Criticalf("Authentication for user <%s> is not available", botUserName)
 		os.Exit(1)
 	}
@@ -198,7 +205,7 @@ func main() {
 	logging.Log.Infof("Slack username: %s", botUserName)
 	logging.Log.Debugf("Slack token: %s", authToken)
 
-	if ! authentication.GoogleAvailable() {
+	if !authentication.GoogleAvailable() {
 		logging.Log.Critical("Authentication for Google is not available")
 		os.Exit(1)
 	}
@@ -326,7 +333,7 @@ func main() {
 		var commandMap map[string]func(string, *slack.MessageEvent)
 		commandMap = make(map[string]func(string, *slack.MessageEvent))
 		commandMap["!hello"] = func(_ string, msg *slack.MessageEvent) {
-			hiMsg := rtm.NewOutgoingMessage("Hi, " + userIDMap[msg.User], msg.Channel)
+			hiMsg := rtm.NewOutgoingMessage("Hi, "+userIDMap[msg.User], msg.Channel)
 			rtm.SendMessage(hiMsg)
 			return
 		}
@@ -340,9 +347,9 @@ func main() {
 				"\t`!whoisop`: show who the current operator is, plus any temporary operators\n" +
 				"\t`!tempoperator [username (optional)]`: add yourself or someone else as a temporary operator; leave the username blank to add yourself\n" +
 				"\t`!removetempoperator [username (optional)]`: remove yourself or someone else as temporary operator; leave the username blank to remove yourself"
-				logging.Log.Debug("Printing help message")
-				helpMsg := rtm.NewOutgoingMessage(msgText, msg.Channel)
-				rtm.SendMessage(helpMsg)
+			logging.Log.Debug("Printing help message")
+			helpMsg := rtm.NewOutgoingMessage(msgText, msg.Channel)
+			rtm.SendMessage(helpMsg)
 		}
 		commandMap["!whoisop"] = func(_ string, msg *slack.MessageEvent) {
 			if theOperator == "" && len(tempOperators) == 0 {
@@ -368,19 +375,19 @@ func main() {
 			if username != "" {
 				logging.Log.Info("Adding as temporary operator user " + username)
 				newUserID, hasID := userNameMap[username]
-				if ! hasID {
+				if !hasID {
 					logging.Log.Warningf("Unknown username: %s", username)
 					osMessage := rtm.NewOutgoingMessage("I'm sorry, I don't recognize that username", msg.Channel)
 					rtm.SendMessage(osMessage)
 					return
 				}
 				tempOperators[newUserID] = getOperatorTag(newUserID)
-				osMessage := rtm.NewOutgoingMessage("Use your powers wisely, " + userIDMap[newUserID] + "!", msg.Channel)
+				osMessage := rtm.NewOutgoingMessage("Use your powers wisely, "+userIDMap[newUserID]+"!", msg.Channel)
 				rtm.SendMessage(osMessage)
 			} else {
 				logging.Log.Info("Adding as temporary operator user " + userIDMap[msg.User])
 				tempOperators[msg.User] = getOperatorTag(msg.User)
-				ssMessage := rtm.NewOutgoingMessage("Use your powers wisely, " + userIDMap[msg.User] + "!", msg.Channel)
+				ssMessage := rtm.NewOutgoingMessage("Use your powers wisely, "+userIDMap[msg.User]+"!", msg.Channel)
 				rtm.SendMessage(ssMessage)
 			}
 		}
@@ -389,7 +396,7 @@ func main() {
 			if username != "" {
 				logging.Log.Info("Removing " + username + " from temporary operatorship")
 				toRemoveID, hasID := userNameMap[username]
-				if ! hasID {
+				if !hasID {
 					logging.Log.Warningf("Unknown username: %s", username)
 					osMessage := rtm.NewOutgoingMessage("I'm sorry, I don't recognize that username", msg.Channel)
 					rtm.SendMessage(osMessage)
@@ -399,9 +406,9 @@ func main() {
 			}
 
 			_, isTempOp := tempOperators[toRemove]
-			if ! isTempOp {
+			if !isTempOp {
 				logging.Log.Debug("Received remove-temp-operator instruction from non-temp-operator")
-				usMessage := rtm.NewOutgoingMessage(userIDMap[toRemove] + " is not currently listed as a temporary operator", msg.Channel)
+				usMessage := rtm.NewOutgoingMessage(userIDMap[toRemove]+" is not currently listed as a temporary operator", msg.Channel)
 				rtm.SendMessage(usMessage)
 				return
 			}
@@ -412,13 +419,12 @@ func main() {
 			return
 		}
 
-
 		logging.Log.Infof("Starting SlackLoop")
-slackLoop:
+	slackLoop:
 		for {
 			select {
 			case controlMsg, queueOk := <-ctrlChan:
-				if ! queueOk {
+				if !queueOk {
 					logging.Log.Error("Control channel has closed")
 					reqChan <- StopExecution
 					break slackLoop
@@ -428,21 +434,21 @@ slackLoop:
 					break slackLoop
 				}
 			case operatorChanToChange, opChanOK := <-opChan:
-				if ! opChanOK {
+				if !opChanOK {
 					logging.Log.Error("Error")
 				}
-				logging.Log.Debugf("Channel gave an operator name: %s", operatorChanToChange )
+				logging.Log.Debugf("Channel gave an operator name: %s", operatorChanToChange)
 				if operatorChanToChange != "" {
 					theOperator = operatorChanToChange
 					theOperatorTag = getOperatorTag(theOperator)
-					ssMessage := rtm.NewOutgoingMessage("Happy operating, " + theOperator + "!", channelID )
+					ssMessage := rtm.NewOutgoingMessage("Happy operating, "+theOperator+"!", channelID)
 					rtm.SendMessage(ssMessage)
 				} else {
 					logging.Log.Warning("Operator name given is null")
 				}
 
 			case event, chanOpen := <-rtm.IncomingEvents:
-				if ! chanOpen {
+				if !chanOpen {
 					logging.Log.Warning("Incoming events channel is closed")
 					break slackLoop
 				}
@@ -484,7 +490,7 @@ slackLoop:
 							logging.Log.Infof("Extra text in the command: %s", extraText)
 						}
 						funcToRun, hasCommand := commandMap[command]
-						if ! hasCommand {
+						if !hasCommand {
 							logging.Log.Warningf("Received unknown command: %s", command)
 							errorMsg := rtm.NewOutgoingMessage("I'm sorry, that's not something I know how to do", evData.Channel)
 							rtm.SendMessage(errorMsg)
@@ -543,11 +549,11 @@ slackLoop:
 		theOperator := ""
 		// proutLoop:
 		logging.Log.Info("Starting GCal loop")
-gCalLoop:
-		for  {
+	gCalLoop:
+		for {
 			select {
 			case controlMsg, queueOk := <-ctrlChan:
-				if ! queueOk {
+				if !queueOk {
 					logging.Log.Error("Control channel has closed")
 					reqChan <- StopExecution
 					break gCalLoop
@@ -565,7 +571,7 @@ gCalLoop:
 				if err != nil {
 					logging.Log.Fatalf("Unable to retrieve next 100 of the user's events. %v", err)
 				}
-				logging.Log.Infof("Found %d events in the Google Calendar.", len(events.Items) )
+				logging.Log.Infof("Found %d events in the Google Calendar.", len(events.Items))
 
 				// foundTheCurrentOp:=false
 				currentOperatorID := ""
@@ -579,7 +585,7 @@ gCalLoop:
 
 						// If the DateTime is an empty string the Event is an all-day Event.
 						// So only Date is available.
-						if strings.Contains(i.Summary,"Operator:") {
+						if strings.Contains(i.Summary, "Operator:") {
 
 							if i.Start.DateTime != "" {
 								whenStart = i.Start.DateTime
@@ -593,15 +599,15 @@ gCalLoop:
 							}
 							const shortForm = "2006-01-02"
 							whenStartTime, _ := time.Parse(shortForm, whenStart)
-							whenStartTime = whenStartTime.Add(time.Hour*time.Duration(9))
+							whenStartTime = whenStartTime.Add(time.Hour * time.Duration(9))
 							whenEndTime, _ := time.Parse(shortForm, whenEnd)
-							whenEndTime = whenEndTime.Add(time.Hour*time.Duration(9))
+							whenEndTime = whenEndTime.Add(time.Hour * time.Duration(9))
 							foundOperatorFullName := strings.Replace(i.Summary, "Operator: ", "", -1)
 							foundOperatorID := userRealNameToIDMap[foundOperatorFullName]
 
-							if inTimeSpan(whenStartTime,whenEndTime,time.Now()) {
+							if inTimeSpan(whenStartTime, whenEndTime, time.Now()) {
 								//here is where the channel comes
-								currentOperatorID=foundOperatorID
+								currentOperatorID = foundOperatorID
 								continue
 							}
 						}
@@ -617,18 +623,18 @@ gCalLoop:
 					isItANewOp = true
 				}
 
-				if initMessageSent  && ! isItANewOp  {
+				if initMessageSent && !isItANewOp {
 					msgToSend := "Hmm, there's no new operator and I already sent the initial message"
 					logging.Log.Infof(msgToSend)
 				} else {
 					msgToSend := ""
 					if theOperator != "" {
-						msgToSend = "I've found a new operator: " + userIDToRealNameMap[userNameMap[theOperator]] + " (shift period: " + whenStart + ":9AM--"+ whenEnd + ":9AM)"
+						msgToSend = "I've found a new operator: " + userIDToRealNameMap[userNameMap[theOperator]] + " (shift period: " + whenStart + ":9AM--" + whenEnd + ":9AM)"
 					} else {
-						if initMessageSent{
+						if initMessageSent {
 							msgToSend = "The last operator has ended their shift: Good job!\n"
 						}
-						msgToSend+= "Found no new operator"
+						msgToSend += "Found no new operator"
 					}
 					logging.Log.Infof(msgToSend)
 					slackMsg := rtm.NewOutgoingMessage(msgToSend, channelID)
