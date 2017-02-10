@@ -4,8 +4,12 @@
 	"maximum-age": "2h",
 
 	"root-dirs": [
-	    "/my/data/hot-dir", 
+	    "/my/data/hot-dir",
 	    "/my/data/warm-dir"
+	],
+
+	"ignore": [
+		"/my/data/hot-dir/keepthis"
 	],
 
 	"wait-interval": "30m"
