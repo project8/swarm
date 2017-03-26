@@ -320,6 +320,7 @@ func main() {
 
 	// Starting the two loops
 	wg.Add(1)
+	// Thread which looks for interactions in the operations channel
 	go func(opChan chan string, ctrlChan chan ControlMessage, reqChan chan ControlMessage) {
 		defer wg.Done()
 
@@ -542,12 +543,12 @@ func main() {
 	}(OperatorNameChannel, controlQueue, requestQueue)
 
 	wg.Add(1)
+	// Thread which looks for events in the Google Calendar
 	go func(ctrlChan chan ControlMessage, reqChan chan ControlMessage) {
 		defer wg.Done()
 
 		initMessageSent := false
 		theOperator := ""
-		// proutLoop:
 		logging.Log.Info("Starting GCal loop")
 	gCalLoop:
 		for {
@@ -570,6 +571,7 @@ func main() {
 					SingleEvents(true).TimeMin(t).MaxResults(100).OrderBy("startTime").Do()
 				if err != nil {
 					logging.Log.Fatalf("Unable to retrieve next 100 of the user's events. %v", err)
+					continue
 				}
 				logging.Log.Infof("Found %d events in the Google Calendar.", len(events.Items))
 
@@ -607,6 +609,7 @@ func main() {
 
 							if inTimeSpan(whenStartTime, whenEndTime, time.Now()) {
 								//here is where the channel comes
+								logging.Log.Infof("Found the new operator: %s",foundOperatorFullName)
 								currentOperatorID = foundOperatorID
 								continue
 							}
