@@ -626,6 +626,7 @@ func main() {
 				} else {
 					logging.Log.Debugf("No upcoming events found.")
 				}
+
 				if foundAnOperator == false && currentOperatorID != "" {
 					logging.Log.Debugf("Found no new operator: removing currentOperatorID")
 					currentOperatorID = ""
@@ -638,7 +639,7 @@ func main() {
 				}
 
 				if initMessageSent && !isItANewOp {
-					msgToSend := "Hmm, I already sent the initial message"
+					msgToSend := "Hmm, I already sent the initial message and there is no new operator"
 					logging.Log.Debugf(msgToSend)
 				} else {
 					msgToSend := ""
@@ -656,7 +657,6 @@ func main() {
 					logging.Log.Debugf("Changing OperatorNameChannel to %s",theOperator)
 					OperatorNameChannel <- theOperator
 					initMessageSent = true
-
 				}
 			}
 		}
