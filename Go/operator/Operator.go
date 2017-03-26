@@ -606,14 +606,18 @@ func main() {
 								whenEnd = i.End.Date
 							}
 							const shortForm = "2006-01-02"
-							whenStartTime, _ := time.Parse(shortForm, whenStart)
-							whenStartTime = whenStartTime.Add(time.Hour * time.Duration(9))
-							whenEndTime, _ := time.Parse(shortForm, whenEnd)
-							whenEndTime = whenEndTime.Add(time.Hour * time.Duration(9))
+							timezone, err := time.LoadLocation("America/Vancouver")
+							if err != nil {
+								fmt.Println("err: ", err.Error())
+							}
+							whenStartDate, _ := time.Parse(shortForm, whenStart)
+							whenStartTime := time.Date(whenStartDate.Year(),whenStartDate.Month(),whenStartDate.Day(),9,0,0,0,timezone)
+							whenEndDay, _ := time.Parse(shortForm, whenEnd)
+							whenEndTime := time.Date(whenEndDay.Year(),whenEndDay.Month(),whenEndDay.Day(),8,59,59,0,timezone)
 							foundOperatorFullName := strings.Replace(i.Summary, "Operator: ", "", -1)
 							foundOperatorID := userRealNameToIDMap[foundOperatorFullName]
 
-							if inTimeSpan(whenStartTime, whenEndTime, time.Now()) {
+							if inTimeSpan(whenStartTime, whenEndTime, time.Now().In(timezone)) {
 								//here is where the channel comes
 								logging.Log.Debugf("Found the current operator: %s",foundOperatorFullName)
 								currentOperatorID = foundOperatorID
