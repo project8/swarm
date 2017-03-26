@@ -549,7 +549,7 @@ func main() {
 
 		initMessageSent := false
 		theOperator := ""
-		logging.Log.Info("Starting GCal loop")
+		logging.Log.Info("Starting GCalLoop")
 	gCalLoop:
 		for {
 			select {
@@ -570,7 +570,8 @@ func main() {
 				events, err := srv.Events.List(calendarName).ShowDeleted(false).
 					SingleEvents(true).TimeMin(t).MaxResults(100).OrderBy("startTime").Do()
 				if err != nil {
-					logging.Log.Fatalf("Unable to retrieve next 100 of the user's events. %v", err)
+					logging.Log.Infof("Unable to retrieve next 100 of the user's events. %v", err)
+					logging.Log.Infof("continue")
 					continue
 				}
 				logging.Log.Infof("Found %d events in the Google Calendar.", len(events.Items))
@@ -609,7 +610,7 @@ func main() {
 
 							if inTimeSpan(whenStartTime, whenEndTime, time.Now()) {
 								//here is where the channel comes
-								logging.Log.Infof("Found the new operator: %s",foundOperatorFullName)
+								logging.Log.Debugf("Found the new operator: %s",foundOperatorFullName)
 								currentOperatorID = foundOperatorID
 								continue
 							}
@@ -617,18 +618,18 @@ func main() {
 					}
 
 				} else {
-					logging.Log.Info("No upcoming events found.")
+					logging.Log.Debugf("No upcoming events found.")
 				}
 
 				if theOperator != userIDMap[currentOperatorID] {
-					logging.Log.Infof("I'm changing old operator (%s) to %s", theOperator, userIDMap[currentOperatorID])
+					logging.Log.Debugf("I'm changing old operator (%s) to %s", theOperator, userIDMap[currentOperatorID])
 					theOperator = userIDMap[currentOperatorID]
 					isItANewOp = true
 				}
 
 				if initMessageSent && !isItANewOp {
 					msgToSend := "Hmm, there's no new operator and I already sent the initial message"
-					logging.Log.Infof(msgToSend)
+					logging.Log.Debugf(msgToSend)
 				} else {
 					msgToSend := ""
 					if theOperator != "" {
@@ -639,7 +640,7 @@ func main() {
 						}
 						msgToSend += "Found no new operator"
 					}
-					logging.Log.Infof(msgToSend)
+					logging.Log.Debugf(msgToSend)
 					slackMsg := rtm.NewOutgoingMessage(msgToSend, channelID)
 					rtm.SendMessage(slackMsg)
 					OperatorNameChannel <- theOperator
