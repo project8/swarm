@@ -446,6 +446,10 @@ func main() {
 					rtm.SendMessage(ssMessage)
 				} else {
 					logging.Log.Warning("Operator name given is null")
+					theOperator = ""
+					theOperatorTag = ""
+					ssMessage := rtm.NewOutgoingMessage("No operator assigned",channelID)
+					rtm.SendMessage(ssMessage)
 				}
 
 			case event, chanOpen := <-rtm.IncomingEvents:
@@ -579,6 +583,7 @@ func main() {
 				// foundTheCurrentOp:=false
 				currentOperatorID := ""
 				isItANewOp := false
+				foundAnOperator := false
 
 				var whenStart string
 				var whenEnd string
@@ -610,8 +615,9 @@ func main() {
 
 							if inTimeSpan(whenStartTime, whenEndTime, time.Now()) {
 								//here is where the channel comes
-								logging.Log.Debugf("Found the new operator: %s",foundOperatorFullName)
+								logging.Log.Debugf("Found the current operator: %s",foundOperatorFullName)
 								currentOperatorID = foundOperatorID
+								foundAnOperator = true
 								continue
 							}
 						}
@@ -619,6 +625,10 @@ func main() {
 
 				} else {
 					logging.Log.Debugf("No upcoming events found.")
+				}
+				if foundAnOperator == false && currentOperatorID != "" {
+					logging.Log.Debugf("Found no new operator: removing currentOperatorID")
+					currentOperatorID = ""
 				}
 
 				if theOperator != userIDMap[currentOperatorID] {
@@ -628,7 +638,7 @@ func main() {
 				}
 
 				if initMessageSent && !isItANewOp {
-					msgToSend := "Hmm, there's no new operator and I already sent the initial message"
+					msgToSend := "Hmm, I already sent the initial message"
 					logging.Log.Debugf(msgToSend)
 				} else {
 					msgToSend := ""
@@ -643,6 +653,7 @@ func main() {
 					logging.Log.Debugf(msgToSend)
 					slackMsg := rtm.NewOutgoingMessage(msgToSend, channelID)
 					rtm.SendMessage(slackMsg)
+					logging.Log.Debugf("Changing OperatorNameChannel to %s",theOperator)
 					OperatorNameChannel <- theOperator
 					initMessageSent = true
 
