@@ -569,8 +569,11 @@ func main() {
 				}
 
 			case <-time.After(10 * time.Second):
-
-				t := time.Now().Format(time.RFC3339)
+				timezone, err := time.LoadLocation("America/Vancouver")
+				if err != nil {
+					fmt.Println("err: ", err.Error())
+				}
+				t := time.Now().Add(-10 * time.Hour).In(timezone).Format(time.RFC3339)
 				events, err := srv.Events.List(calendarName).ShowDeleted(false).
 					SingleEvents(true).TimeMin(t).MaxResults(100).OrderBy("startTime").Do()
 				if err != nil {
@@ -606,10 +609,7 @@ func main() {
 								whenEnd = i.End.Date
 							}
 							const shortForm = "2006-01-02"
-							timezone, err := time.LoadLocation("America/Vancouver")
-							if err != nil {
-								fmt.Println("err: ", err.Error())
-							}
+
 							whenStartDate, _ := time.Parse(shortForm, whenStart)
 							whenStartTime := time.Date(whenStartDate.Year(),whenStartDate.Month(),whenStartDate.Day(),9,0,0,0,timezone)
 							whenEndDay, _ := time.Parse(shortForm, whenEnd)
