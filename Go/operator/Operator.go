@@ -320,6 +320,7 @@ func main() {
 
 	// Starting the two loops
 	wg.Add(1)
+	// Thread which looks for interactions in the operations channel
 	go func(opChan chan string, ctrlChan chan ControlMessage, reqChan chan ControlMessage) {
 		defer wg.Done()
 
@@ -445,6 +446,10 @@ func main() {
 					rtm.SendMessage(ssMessage)
 				} else {
 					logging.Log.Warning("Operator name given is null")
+					theOperator = ""
+					theOperatorTag = ""
+					ssMessage := rtm.NewOutgoingMessage("No operator assigned",channelID)
+					rtm.SendMessage(ssMessage)
 				}
 
 			case event, chanOpen := <-rtm.IncomingEvents:
@@ -542,13 +547,13 @@ func main() {
 	}(OperatorNameChannel, controlQueue, requestQueue)
 
 	wg.Add(1)
+	// Thread which looks for events in the Google Calendar
 	go func(ctrlChan chan ControlMessage, reqChan chan ControlMessage) {
 		defer wg.Done()
 
 		initMessageSent := false
 		theOperator := ""
-		// proutLoop:
-		logging.Log.Info("Starting GCal loop")
+		logging.Log.Info("Starting GCalLoop")
 	gCalLoop:
 		for {
 			select {
@@ -564,18 +569,24 @@ func main() {
 				}
 
 			case <-time.After(10 * time.Second):
-
-				t := time.Now().Format(time.RFC3339)
+				timezone, err := time.LoadLocation("America/Vancouver")
+				if err != nil {
+					fmt.Println("err: ", err.Error())
+				}
+				t := time.Now().Add(-10 * time.Hour).In(timezone).Format(time.RFC3339)
 				events, err := srv.Events.List(calendarName).ShowDeleted(false).
 					SingleEvents(true).TimeMin(t).MaxResults(100).OrderBy("startTime").Do()
 				if err != nil {
-					logging.Log.Fatalf("Unable to retrieve next 100 of the user's events. %v", err)
+					logging.Log.Infof("Unable to retrieve next 100 of the user's events. %v", err)
+					logging.Log.Infof("continue")
+					continue
 				}
 				logging.Log.Infof("Found %d events in the Google Calendar.", len(events.Items))
 
 				// foundTheCurrentOp:=false
 				currentOperatorID := ""
 				isItANewOp := false
+				foundAnOperator := false
 
 				var whenStart string
 				var whenEnd string
@@ -598,34 +609,42 @@ func main() {
 								whenEnd = i.End.Date
 							}
 							const shortForm = "2006-01-02"
-							whenStartTime, _ := time.Parse(shortForm, whenStart)
-							whenStartTime = whenStartTime.Add(time.Hour * time.Duration(9))
-							whenEndTime, _ := time.Parse(shortForm, whenEnd)
-							whenEndTime = whenEndTime.Add(time.Hour * time.Duration(9))
+
+							whenStartDate, _ := time.Parse(shortForm, whenStart)
+							whenStartTime := time.Date(whenStartDate.Year(),whenStartDate.Month(),whenStartDate.Day(),9,0,0,0,timezone)
+							whenEndDay, _ := time.Parse(shortForm, whenEnd)
+							whenEndTime := time.Date(whenEndDay.Year(),whenEndDay.Month(),whenEndDay.Day(),8,59,59,0,timezone)
 							foundOperatorFullName := strings.Replace(i.Summary, "Operator: ", "", -1)
 							foundOperatorID := userRealNameToIDMap[foundOperatorFullName]
 
-							if inTimeSpan(whenStartTime, whenEndTime, time.Now()) {
+							if inTimeSpan(whenStartTime, whenEndTime, time.Now().In(timezone)) {
 								//here is where the channel comes
+								logging.Log.Debugf("Found the current operator: %s",foundOperatorFullName)
 								currentOperatorID = foundOperatorID
+								foundAnOperator = true
 								continue
 							}
 						}
 					}
 
 				} else {
-					logging.Log.Info("No upcoming events found.")
+					logging.Log.Debugf("No upcoming events found.")
+				}
+
+				if foundAnOperator == false && currentOperatorID != "" {
+					logging.Log.Debugf("Found no new operator: removing currentOperatorID")
+					currentOperatorID = ""
 				}
 
 				if theOperator != userIDMap[currentOperatorID] {
-					logging.Log.Infof("I'm changing old operator (%s) to %s", theOperator, userIDMap[currentOperatorID])
+					logging.Log.Debugf("I'm changing old operator (%s) to %s", theOperator, userIDMap[currentOperatorID])
 					theOperator = userIDMap[currentOperatorID]
 					isItANewOp = true
 				}
 
 				if initMessageSent && !isItANewOp {
-					msgToSend := "Hmm, there's no new operator and I already sent the initial message"
-					logging.Log.Infof(msgToSend)
+					msgToSend := "Hmm, I already sent the initial message and there is no new operator"
+					logging.Log.Debugf(msgToSend)
 				} else {
 					msgToSend := ""
 					if theOperator != "" {
@@ -636,12 +655,12 @@ func main() {
 						}
 						msgToSend += "Found no new operator"
 					}
-					logging.Log.Infof(msgToSend)
+					logging.Log.Debugf(msgToSend)
 					slackMsg := rtm.NewOutgoingMessage(msgToSend, channelID)
 					rtm.SendMessage(slackMsg)
+					logging.Log.Debugf("Changing OperatorNameChannel to %s",theOperator)
 					OperatorNameChannel <- theOperator
 					initMessageSent = true
-
 				}
 			}
 		}
