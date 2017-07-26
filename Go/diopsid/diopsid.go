@@ -33,7 +33,7 @@ import (
 type DiskStatus struct {
 	All  uint64 `json:"all"`
 	Used uint64 `json:"used"`
-	Free uint64 `json:"free"`
+	Avail uint64 `json:"avail"`
 }
 
 // disk usage of path/disk
@@ -44,8 +44,8 @@ func DiskUsage(path string) (disk DiskStatus) {
 		return
 	}
 	disk.All = fs.Blocks * uint64(fs.Bsize)
-	disk.Free = fs.Bfree * uint64(fs.Bsize)
-	disk.Used = disk.All - disk.Free
+	disk.Avail = fs.Bavail * uint64(fs.Bsize)
+	disk.Used = disk.All - disk.Avail
 	return
 }
 
