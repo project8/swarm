@@ -31,9 +31,8 @@ import (
 
 
 type DiskStatus struct {
-	All  uint64 `json:"all"`
 	Used uint64 `json:"used"`
-	Avail uint64 `json:"avail"`
+	Fraction float64 `json:"fraction"`
 }
 
 // disk usage of path/disk
@@ -43,9 +42,8 @@ func DiskUsage(path string) (disk DiskStatus) {
 	if err != nil {
 		return
 	}
-	disk.All = fs.Blocks * uint64(fs.Bsize)
-	disk.Avail = fs.Bavail * uint64(fs.Bsize)
-	disk.Used = disk.All - disk.Avail
+	disk.Used = (fs.Blocks-fs.Bfree) * uint64(fs.Bsize)
+	disk.Fraction = float64(fs.Blocks-fs.Bfree) / float64(fs.Blocks-fs.Bfree+fs.Bavail)
 	return
 }
 
@@ -185,13 +183,12 @@ func main() {
 			disk := DiskUsage(dir)
 			var payload map[string]interface{}
 			payload = make(map[string]interface{})
-			payload["directory"] = dir
-			payload["all"] = float64(disk.All)/float64(GB)
-			payload["used"] = float64(disk.Used)/float64(GB)
+			payload["value_raw"] = float64(disk.Used) / float64(GB)
+			payload["value_cal"] = disk.Fraction
 			alert.Message.Payload = payload
 
 			e := service.SendAlert(alert)
-			logging.Log.Infof("Alert sent: [%s] All: %.2f GB Used: %.2f GB",dir,float64(disk.All)/float64(GB),float64(disk.Used)/float64(GB))
+			logging.Log.Infof("Alert sent: [%s] Used: %d KB, Use Fraction: %.3f",dir,disk.Used/KB,disk.Fraction)
 			if e != nil {
 				logging.Log.Errorf("Could not send the alert: %v", e)
 			}
