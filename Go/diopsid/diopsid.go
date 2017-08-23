@@ -12,7 +12,7 @@ import (
 	// "path/filepath"
 	//"reflect"
 	// "strconv"
-	// "strings"
+	"strings"
 	"syscall"
 	//"sync"
 	"time"
@@ -109,7 +109,7 @@ func main() {
 	viper.SetDefault("broker", "localhost")
 	viper.SetDefault("wait-interval", "1m")
 	viper.SetDefault("subscribe-queue", "diopsid-queue")
-	viper.SetDefault("alerts-queue", "disk_status.machinename")
+	viper.SetDefault("alerts-queue-base", "sensor_value.disks_machinename_")
 
 	// load config
 	if configFile != "" {
@@ -128,6 +128,10 @@ func main() {
 		logging.Log.Critical("No directories were provided")
 		os.Exit(1)
 	}
+    for i, dir := range wheretolook {
+        wheretolook[i] = strings.TrimSuffix(dir,"/")
+    }
+    logging.Log.Debugf("wheretolook after trimming trailing '/' : %q",wheretolook)
 
 	// computername := viper.GetString("computer-name")
 	// computername,e := os.Hostname()
@@ -137,7 +141,7 @@ func main() {
 	// }
 	broker := viper.GetString("broker")
 	queueName := viper.GetString("subscribe-queue")
-	alertsQueueName := viper.GetString("alerts-queue")
+	alertsQueueBase := viper.GetString("alerts-queue-base")
 	waitInterval := viper.GetDuration("wait-interval")
 
 	// check authentication for desired username
@@ -179,7 +183,8 @@ func main() {
 
 	for {
 		for _, dir := range wheretolook {
-			alert := dripline.PrepareAlert(alertsQueueName, "application/json", MasterSenderInfo)
+            diskname := strings.Split(dir,"/")
+			alert := dripline.PrepareAlert(alertsQueueBase+diskname[len(diskname)-1], "application/json", MasterSenderInfo)
 			disk := DiskUsage(dir)
 			var payload map[string]interface{}
 			payload = make(map[string]interface{})
