@@ -1,9 +1,8 @@
 {
-	"log-level": "INFO",
-	"subscribe-queue": "diopsid_namchinename",
-	"alerts-queue": "disk_status.machinename",
-	"broker": "higgsino.physics.ucsb.edu",
-	"where-to-look": ["/data/hot","/data/warm"],
-	"wait-interval": "1m"
-
+    "log-level": "INFO",
+    "subscribe-queue": "diopsid_{machine}",
+    "alerts-queue-base": "sensor_value.disks_{machine}_",
+    "broker": "localhost",
+    "where-to-look": ["/data/disk1","/data/disk2"],
+    "wait-interval": "1m"
 }

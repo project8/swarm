@@ -1,0 +1,8 @@
+subscribe-queue: diopsid_{machine}
+alerts-queue-base: sensor_value.disks_{machine}_ # trailing _ preserves alerts queue formatting
+broker: localhost
+where-to-look:
+  - /data/disk1
+  - /data/disk2
+wait-interval: 1m
+log-level: INFO

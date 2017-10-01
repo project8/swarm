@@ -12,7 +12,7 @@ import (
 	// "path/filepath"
 	//"reflect"
 	// "strconv"
-	// "strings"
+	"strings"
 	"syscall"
 	//"sync"
 	"time"
@@ -31,9 +31,8 @@ import (
 
 
 type DiskStatus struct {
-	All  uint64 `json:"all"`
 	Used uint64 `json:"used"`
-	Avail uint64 `json:"avail"`
+	Fraction float64 `json:"fraction"`
 }
 
 // disk usage of path/disk
@@ -43,9 +42,8 @@ func DiskUsage(path string) (disk DiskStatus) {
 	if err != nil {
 		return
 	}
-	disk.All = fs.Blocks * uint64(fs.Bsize)
-	disk.Avail = fs.Bavail * uint64(fs.Bsize)
-	disk.Used = disk.All - disk.Avail
+	disk.Used = (fs.Blocks-fs.Bfree) * uint64(fs.Bsize)
+	disk.Fraction = float64(fs.Blocks-fs.Bfree) / float64(fs.Blocks-fs.Bfree+fs.Bavail)
 	return
 }
 
@@ -111,7 +109,7 @@ func main() {
 	viper.SetDefault("broker", "localhost")
 	viper.SetDefault("wait-interval", "1m")
 	viper.SetDefault("subscribe-queue", "diopsid-queue")
-	viper.SetDefault("alerts-queue", "disk_status.machinename")
+	viper.SetDefault("alerts-queue-base", "sensor_value.disks_machinename_")
 
 	// load config
 	if configFile != "" {
@@ -130,6 +128,10 @@ func main() {
 		logging.Log.Critical("No directories were provided")
 		os.Exit(1)
 	}
+    for i, dir := range wheretolook {
+        wheretolook[i] = strings.TrimSuffix(dir,"/")
+    }
+    logging.Log.Debugf("wheretolook after trimming trailing '/' : %q",wheretolook)
 
 	// computername := viper.GetString("computer-name")
 	// computername,e := os.Hostname()
@@ -139,7 +141,7 @@ func main() {
 	// }
 	broker := viper.GetString("broker")
 	queueName := viper.GetString("subscribe-queue")
-	alertsQueueName := viper.GetString("alerts-queue")
+	alertsQueueBase := viper.GetString("alerts-queue-base")
 	waitInterval := viper.GetDuration("wait-interval")
 
 	// check authentication for desired username
@@ -181,17 +183,17 @@ func main() {
 
 	for {
 		for _, dir := range wheretolook {
-			alert := dripline.PrepareAlert(alertsQueueName, "application/json", MasterSenderInfo)
+            diskname := strings.Split(dir,"/")
+			alert := dripline.PrepareAlert(alertsQueueBase+diskname[len(diskname)-1], "application/json", MasterSenderInfo)
 			disk := DiskUsage(dir)
 			var payload map[string]interface{}
 			payload = make(map[string]interface{})
-			payload["directory"] = dir
-			payload["all"] = float64(disk.All)/float64(GB)
-			payload["used"] = float64(disk.Used)/float64(GB)
+			payload["value_raw"] = float64(disk.Used) / float64(GB)
+			payload["value_cal"] = disk.Fraction
 			alert.Message.Payload = payload
 
 			e := service.SendAlert(alert)
-			logging.Log.Infof("Alert sent: [%s] All: %.2f GB Used: %.2f GB",dir,float64(disk.All)/float64(GB),float64(disk.Used)/float64(GB))
+			logging.Log.Infof("Alert sent: [%s] Used: %d KB, Use Fraction: %.3f",dir,disk.Used/KB,disk.Fraction)
 			if e != nil {
 				logging.Log.Errorf("Could not send the alert: %v", e)
 			}
