@@ -194,6 +194,7 @@ func main() {
 				logging.Log.Errorf("Could not send the alert: %v", e)
 			}
 			logging.Log.Infof("Alert sent: [%s] Used: %d KB, Use Fraction: %.3f", dir, disk.Used/KB, disk.Fraction)
+			time.Sleep(2 * time.Second)
 		}
 		logging.Log.Infof("Sleeping now")
 		time.Sleep(waitInterval)
