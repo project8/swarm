@@ -1,7 +1,10 @@
-// This program will look at specified folder on the machine where it is running and get the total and the used spaces.
-// It will then send an alert to the disk_status.name_of_computer queue about these two pieces of information.
-// It will then go to sleep for a specified amount of time.
-// Author: Mathieu Guigue (Last update: Dec 1 2016)
+/* This program will look at specified folder on the machine where it is running and get used space.
+It will then send an alert to the sensor_value.disks_{machine}_{diskname} queue about these two pieces of information.
+It will then go to sleep for a specified amount of time.
+
+Created: Mathieu Guigue, Dec 1 2016
+Last update: Walter Pettus, Oct 1 2017
+*/
 package main
 
 import (
@@ -29,9 +32,8 @@ import (
 	// "github.com/project8/swarm/Go/utility"
 )
 
-
 type DiskStatus struct {
-	Used uint64 `json:"used"`
+	Used     uint64  `json:"used"`
 	Fraction float64 `json:"fraction"`
 }
 
@@ -42,7 +44,7 @@ func DiskUsage(path string) (disk DiskStatus) {
 	if err != nil {
 		return
 	}
-	disk.Used = (fs.Blocks-fs.Bfree) * uint64(fs.Bsize)
+	disk.Used = (fs.Blocks - fs.Bfree) * uint64(fs.Bsize)
 	disk.Fraction = float64(fs.Blocks-fs.Bfree) / float64(fs.Blocks-fs.Bfree+fs.Bavail)
 	return
 }
@@ -55,6 +57,7 @@ const (
 )
 
 var MasterSenderInfo dripline.SenderInfo
+
 func fillMasterSenderInfo() (e error) {
 	MasterSenderInfo.Package = "diopsid"
 	MasterSenderInfo.Exe, e = osext.Executable()
@@ -128,17 +131,11 @@ func main() {
 		logging.Log.Critical("No directories were provided")
 		os.Exit(1)
 	}
-    for i, dir := range wheretolook {
-        wheretolook[i] = strings.TrimSuffix(dir,"/")
-    }
-    logging.Log.Debugf("wheretolook after trimming trailing '/' : %q",wheretolook)
+	for i, dir := range wheretolook {
+		wheretolook[i] = strings.TrimSuffix(dir, "/")
+	}
+	logging.Log.Debugf("wheretolook after trimming trailing '/' : %q", wheretolook)
 
-	// computername := viper.GetString("computer-name")
-	// computername,e := os.Hostname()
-	// if e != nil {
-	// 	logging.Log.Criticalf("Couldn't get the hostname")
-	// 	return
-	// }
 	broker := viper.GetString("broker")
 	queueName := viper.GetString("subscribe-queue")
 	alertsQueueBase := viper.GetString("alerts-queue-base")
@@ -150,7 +147,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if ! authentication.AmqpAvailable() {
+	if !authentication.AmqpAvailable() {
 		logging.Log.Critical("Authentication for AMQP is not available")
 		os.Exit(1)
 	}
@@ -160,7 +157,7 @@ func main() {
 	url := "amqp://" + amqpUser + ":" + amqpPassword + "@" + broker
 
 	service := dripline.StartService(url, queueName)
-	if (service == nil) {
+	if service == nil {
 		logging.Log.Critical("AMQP service did not start")
 		os.Exit(1)
 	}
@@ -183,7 +180,7 @@ func main() {
 
 	for {
 		for _, dir := range wheretolook {
-            diskname := strings.Split(dir,"/")
+			diskname := strings.Split(dir, "/")
 			alert := dripline.PrepareAlert(alertsQueueBase+diskname[len(diskname)-1], "application/json", MasterSenderInfo)
 			disk := DiskUsage(dir)
 			var payload map[string]interface{}
@@ -193,17 +190,12 @@ func main() {
 			alert.Message.Payload = payload
 
 			e := service.SendAlert(alert)
-			logging.Log.Infof("Alert sent: [%s] Used: %d KB, Use Fraction: %.3f",dir,disk.Used/KB,disk.Fraction)
 			if e != nil {
 				logging.Log.Errorf("Could not send the alert: %v", e)
 			}
+			logging.Log.Infof("Alert sent: [%s] Used: %d KB, Use Fraction: %.3f", dir, disk.Used/KB, disk.Fraction)
 		}
 		logging.Log.Infof("Sleeping now")
 		time.Sleep(waitInterval)
 	}
 }
-
-
-	//context := build.defaultContext()
-
-	//os.Exit(2)
