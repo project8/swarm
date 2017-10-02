@@ -18,7 +18,7 @@
 
 ## Installation
 
-swarm/Go requires Golang 1.1 or better.
+swarm/Go requires Golang 1.8 or better to properly interface with amqp via dripline-go (otherwise Golang 1.1 is sufficient).
 
 Once you have your Golang environemnt set up ([e.g.](http://golang.org/doc/code.html#Workspaces)), use this command to install all of swarm/Go:
 
