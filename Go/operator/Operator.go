@@ -448,7 +448,7 @@ func main() {
 					logging.Log.Warning("Operator name given is null")
 					theOperator = ""
 					theOperatorTag = ""
-					ssMessage := rtm.NewOutgoingMessage("No operator assigned",channelID)
+					ssMessage := rtm.NewOutgoingMessage("No operator assigned", channelID)
 					rtm.SendMessage(ssMessage)
 				}
 
@@ -611,40 +611,40 @@ func main() {
 							const shortForm = "2006-01-02"
 
 							whenStartDate, _ := time.Parse(shortForm, whenStart)
-							whenStartTime := time.Date(whenStartDate.Year(),whenStartDate.Month(),whenStartDate.Day(),9,0,0,0,timezone)
+							whenStartTime := time.Date(whenStartDate.Year(), whenStartDate.Month(), whenStartDate.Day(), 9, 0, 0, 0, timezone)
 							whenEndDay, _ := time.Parse(shortForm, whenEnd)
-							whenEndTime := time.Date(whenEndDay.Year(),whenEndDay.Month(),whenEndDay.Day(),8,59,59,0,timezone)
+							whenEndTime := time.Date(whenEndDay.Year(), whenEndDay.Month(), whenEndDay.Day(), 8, 59, 59, 0, timezone)
 							foundOperatorFullName := strings.Replace(i.Summary, "Operator: ", "", -1)
 							foundOperatorID := userRealNameToIDMap[foundOperatorFullName]
 
 							if inTimeSpan(whenStartTime, whenEndTime, time.Now().In(timezone)) {
 								//here is where the channel comes
-								logging.Log.Debugf("Found the current operator: %s",foundOperatorFullName)
+								logging.Log.Infof("Found the current operator: %s", foundOperatorFullName)
 								currentOperatorID = foundOperatorID
 								foundAnOperator = true
-								continue
+								break
 							}
 						}
 					}
 
 				} else {
-					logging.Log.Debugf("No upcoming events found.")
+					logging.Log.Infof("No upcoming events found.")
 				}
 
 				if foundAnOperator == false && currentOperatorID != "" {
-					logging.Log.Debugf("Found no new operator: removing currentOperatorID")
+					logging.Log.Infof("Found no new operator: removing currentOperatorID")
 					currentOperatorID = ""
 				}
 
 				if theOperator != userIDMap[currentOperatorID] {
-					logging.Log.Debugf("I'm changing old operator (%s) to %s", theOperator, userIDMap[currentOperatorID])
+					logging.Log.Infof("I'm changing old operator (%s) to %s", theOperator, userIDMap[currentOperatorID])
 					theOperator = userIDMap[currentOperatorID]
 					isItANewOp = true
 				}
 
 				if initMessageSent && !isItANewOp {
 					msgToSend := "Hmm, I already sent the initial message and there is no new operator"
-					logging.Log.Debugf(msgToSend)
+					logging.Log.Infof(msgToSend)
 				} else {
 					msgToSend := ""
 					if theOperator != "" {
@@ -655,10 +655,10 @@ func main() {
 						}
 						msgToSend += "Found no new operator"
 					}
-					logging.Log.Debugf(msgToSend)
+					logging.Log.Infof(msgToSend)
 					slackMsg := rtm.NewOutgoingMessage(msgToSend, channelID)
 					rtm.SendMessage(slackMsg)
-					logging.Log.Debugf("Changing OperatorNameChannel to %s",theOperator)
+					logging.Log.Infof("Changing OperatorNameChannel to %s", theOperator)
 					OperatorNameChannel <- theOperator
 					initMessageSent = true
 				}
