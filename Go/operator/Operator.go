@@ -360,7 +360,7 @@ func main() {
 			}
 			var msgText string
 			if theOperator != "" {
-				msgText += "The operator is " + theOperator + ".  "
+				msgText += "The operator is " + userIDMap[theOperator] + ".  "
 			}
 			if len(tempOperators) != 0 {
 				msgText += "Temporary operators: "
@@ -438,11 +438,11 @@ func main() {
 				if !opChanOK {
 					logging.Log.Error("Error")
 				}
-				logging.Log.Debugf("Channel gave an operator name: %s", operatorChanToChange)
+				logging.Log.Debugf("Channel gave an operator ID: %s", operatorChanToChange)
 				if operatorChanToChange != "" {
 					theOperator = operatorChanToChange
 					theOperatorTag = getOperatorTag(theOperator)
-					ssMessage := rtm.NewOutgoingMessage("Happy operating, "+theOperator+"!", channelID)
+					ssMessage := rtm.NewOutgoingMessage("Happy operating, "+userIDMap[theOperator]+"!", channelID)
 					rtm.SendMessage(ssMessage)
 				} else {
 					logging.Log.Warning("Operator name given is null")
@@ -636,9 +636,9 @@ func main() {
 					currentOperatorID = ""
 				}
 
-				if theOperator != userIDMap[currentOperatorID] {
-					logging.Log.Infof("I'm changing old operator (%s) to %s", theOperator, userIDMap[currentOperatorID])
-					theOperator = userIDMap[currentOperatorID]
+				if theOperator != currentOperatorID {
+					logging.Log.Infof("I'm changing old operator (%s) to %s", userIDMap[theOperator], userIDMap[currentOperatorID])
+					theOperator = currentOperatorID
 					isItANewOp = true
 				}
 
@@ -648,7 +648,7 @@ func main() {
 				} else {
 					msgToSend := ""
 					if theOperator != "" {
-						msgToSend = "I've found a new operator: " + userIDToRealNameMap[userNameMap[theOperator]] + " (shift period: " + whenStart + ":9AM--" + whenEnd + ":9AM)"
+						msgToSend = "I've found a new operator: " + userIDToRealNameMap[theOperator] + " (shift period: " + whenStart + ":9AM--" + whenEnd + ":9AM)"
 					} else {
 						if initMessageSent {
 							msgToSend = "The last operator has ended their shift: Good job!\n"
@@ -658,7 +658,7 @@ func main() {
 					logging.Log.Infof(msgToSend)
 					slackMsg := rtm.NewOutgoingMessage(msgToSend, channelID)
 					rtm.SendMessage(slackMsg)
-					logging.Log.Infof("Changing OperatorNameChannel to %s", theOperator)
+					logging.Log.Infof("Changing OperatorNameChannel to %s", userIDMap[theOperator])
 					OperatorNameChannel <- theOperator
 					initMessageSent = true
 				}
